@@ -1,248 +1,131 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
-import * as MediaLibrary from 'expo-media-library';
-import React, { useEffect, useState } from 'react';
-import { Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { PlayerControls } from './components/music-player/PlayerControls';
-import { Playlist } from './components/music-player/Playlist';
-import { useAudioPlayer } from './hooks/useAudioPlayer';
+import { useFocusEffect } from 'expo-router';
+import React, { useState } from 'react';
+import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useAudioPlayer } from './hooks/AudioPlayerContext';
+import { useMusic } from './hooks/MusicContext';
 import { Song } from './types/music';
-import { formatTime } from './utils/audioUtils';
 
-export default function MusicPlayer() {
-  const [playlist, setPlaylist] = useState<Song[]>([]);
-  const [duration, setDuration] = useState('');
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [scheduledStopTime, setScheduledStopTime] = useState<Date | null>(null);
-  const [permissionGranted, setPermissionGranted] = useState(false);
-
-  // Fetch all audio files on mount
-  useEffect(() => {
-    const fetchAudioFiles = async () => {
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Please grant media library permissions.');
-        return;
-      }
-      setPermissionGranted(true);
-      const media = await MediaLibrary.getAssetsAsync({ mediaType: 'audio', first: 1000 });
-      const songs: Song[] = media.assets.map(asset => ({
-        id: asset.id,
-        title: asset.filename,
-        uri: asset.uri,
-        duration: asset.duration
-      }));
-      setPlaylist(songs);
-    };
-    fetchAudioFiles();
-  }, []);
-
+export default function AllSongsScreen() {
   const {
-    currentSong,
-    isPlaying,
-    progress,
-    timeRemaining,
-    duration: trackDuration,
-    position,
-    playMusic,
-    pauseMusic,
-    resumeMusic,
-    stopMusic,
-    startTimer,
-    seekTo,
-    playNext,
-    playPrevious,
-  } = useAudioPlayer(playlist);
+    allSongs,
+    currentPlaylist,
+    getSongsForPlaylist,
+    setCurrentPlaylist,
+  } = useMusic();
 
-  const handlePlayPause = async () => {
-    if (isPlaying) {
-      await pauseMusic();
-    } else {
-      if (currentSong) {
-        await resumeMusic();
-      } else if (playlist.length > 0) {
-        await playMusic(playlist[0]);
-      } else {
-        Alert.alert('No Songs', 'No songs found on device.');
-      }
-    }
-  };
+  const songList = getSongsForPlaylist(null); // Always get all songs
+  const { currentSong, playMusic, setSongList, stopMusicWithoutClearingTimer } = useAudioPlayer();
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const handleStop = async () => {
-    try {
-      await stopMusic();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to stop the music');
-    }
-  };
+  // Filter songs based on search query
+  const filteredSongs = songList.filter(song =>
+    song.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const handleTimerStart = async () => {
-    if (!duration) {
-      Alert.alert('Error', 'Please enter a duration');
-      return;
-    }
-    const minutes = parseInt(duration);
-    if (isNaN(minutes) || minutes <= 0) {
-      Alert.alert('Error', 'Please enter a valid duration');
-      return;
-    }
-    await startTimer(minutes);
-  };
+  // On tab focus, set the global player's songList to all songs
+  useFocusEffect(
+    React.useCallback(() => {
+      setSongList(songList);
+    }, [songList, setSongList])
+  );
 
-  const handleSeek = async (newProgress: number) => {
-    if (trackDuration) {
-      await seekTo(newProgress * trackDuration);
-    }
-  };
-
-  const scheduleStop = (event: any, selectedDate?: Date) => {
-    setShowTimePicker(false);
-    if (selectedDate) {
-      setScheduledStopTime(selectedDate);
-      const now = new Date();
-      const timeUntilStop = selectedDate.getTime() - now.getTime();
-      setTimeout(() => {
-        stopMusic();
-        setScheduledStopTime(null);
-      }, timeUntilStop);
-    }
+  const handlePlaySong = async (song: Song) => {
+    setSongList(songList);
+    await stopMusicWithoutClearingTimer();
+    playMusic(song);
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollViewContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Music Player</Text>
-        </View>
+    <View style={styles.container}>
+      <Text style={styles.title}>All Songs</Text>
+      
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search songs..."
+          placeholderTextColor="#888"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
 
-        <View style={styles.mainContent}>
-          <PlayerControls
-            isPlaying={isPlaying}
-            onPlayPause={handlePlayPause}
-            onStop={handleStop}
-            onNext={playNext}
-            onPrevious={playPrevious}
-            currentSong={currentSong}
-            progress={progress}
-            duration={trackDuration}
-            position={position}
-            onSeek={handleSeek}
-          />
-
-          {timeRemaining !== null && (
-            <View style={styles.countdownContainer}>
-              <Text style={styles.countdownText}>
-                Time Remaining: {formatTime(timeRemaining)}
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.timerControls}>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter duration in minutes"
-              keyboardType="numeric"
-              value={duration}
-              onChangeText={setDuration}
-            />
-            <TouchableOpacity style={styles.timerButton} onPress={handleTimerStart}>
-              <Text style={styles.buttonText}>Start Timer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.timerButton} 
-              onPress={() => setShowTimePicker(true)}
-            >
-              <Text style={styles.buttonText}>Schedule Stop</Text>
-            </TouchableOpacity>
-          </View>
-
-          {showTimePicker && (
-            <DateTimePicker
-              value={scheduledStopTime || new Date()}
-              mode="time"
-              is24Hour={true}
-              display="default"
-              onChange={scheduleStop}
-            />
-          )}
-
-          {scheduledStopTime && (
-            <Text style={styles.scheduledTime}>
-              Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
-            </Text>
-          )}
-
-          <Playlist
-            playlist={playlist}
-            currentSong={currentSong}
-            onSongSelect={playMusic}
-          />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      <FlatList
+        data={filteredSongs}
+        keyExtractor={item => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[styles.songRow, currentSong?.id === item.id && styles.currentSongRow]}
+            onPress={() => handlePlaySong(item)}
+          >
+            <Text style={styles.songTitle}>{item.title}</Text>
+            {currentSong?.id === item.id && <Text style={styles.playingText}>Playing</Text>}
+          </TouchableOpacity>
+        )}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {searchQuery ? `No songs found matching "${searchQuery}"` : 'No songs found on device.'}
+          </Text>
+        }
+        contentContainerStyle={styles.listContent}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollViewContent: {
-    flexGrow: 1,
-  },
-  header: {
+    backgroundColor: '#181A20',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    paddingTop: 20, // Reduced since SafeAreaView handles the notification area
+  },
+  searchContainer: {
+    marginBottom: 20,
+  },
+  searchInput: {
+    backgroundColor: '#23242a',
+    color: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#23242a',
+  },
+  listContent: {
+    paddingBottom: 20, // Reduced since no bottom tabs
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
-    textAlign: 'center',
+    color: '#fff',
+    marginBottom: 20,
   },
-  mainContent: {
-    flex: 1,
-  },
-  countdownContainer: {
-    padding: 10,
-    backgroundColor: '#f0f0f0',
+  songRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#23242a',
     borderRadius: 8,
-    margin: 20,
-  },
-  countdownText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    textAlign: 'center',
-  },
-  timerControls: {
-    padding: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  timerButton: {
-    backgroundColor: '#007AFF',
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 10,
+    marginBottom: 8,
   },
-  buttonText: {
-    color: 'white',
-    textAlign: 'center',
-    fontWeight: '600',
+  currentSongRow: {
+    borderColor: '#007AFF',
+    borderWidth: 2,
   },
-  scheduledTime: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 10,
+  songTitle: {
+    color: '#fff',
+    flex: 1,
+    marginRight: 10,
+  },
+  playingText: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  emptyText: {
+    color: '#888',
     textAlign: 'center',
+    marginTop: 40,
   },
 }); 

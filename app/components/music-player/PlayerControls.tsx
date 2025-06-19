@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Slider from '@react-native-community/slider';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface PlayerControlsProps {
   isPlaying: boolean;
@@ -34,45 +35,72 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
   position,
   onSeek,
 }) => {
-  // Calculate progress bar width and handle press
-  const handleSeekBarPress = (event: any) => {
-    const { locationX, width } = event.nativeEvent;
-    const newProgress = locationX / width;
-    onSeek(newProgress);
-  };
+  // Animation for music icon
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (isPlaying) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scaleAnim, { toValue: 1.1, duration: 400, useNativeDriver: true }),
+          Animated.timing(scaleAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      scaleAnim.stopAnimation();
+      scaleAnim.setValue(1);
+    }
+  }, [isPlaying]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.albumArt}>
-        <Ionicons name="musical-notes" size={80} color="#666" />
-      </View>
-
-      <Text style={styles.songTitle} numberOfLines={2}>
-        {currentSong?.title || 'No song selected'}
-      </Text>
-
-      <View style={styles.progressBarContainer}>
-        <Pressable style={{ flex: 1 }} onPress={handleSeekBarPress}>
-          <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
-        </Pressable>
-        <View style={styles.timeRow}>
-          <Text style={styles.timeText}>{formatTime(position)}</Text>
-          <Text style={styles.timeText}>{formatTime(duration)}</Text>
+      {/* Song Info Row */}
+      <View style={styles.songInfoRow}>
+        <Animated.View style={[styles.miniAlbumArt, { transform: [{ scale: scaleAnim }] }]}>
+          <Ionicons name="musical-notes" size={16} color="#666" />
+        </Animated.View>
+        
+        <View style={styles.songTextContainer}>
+          <Text style={styles.songTitle} numberOfLines={1}>
+            {currentSong?.title || 'No song selected'}
+          </Text>
+          <Text style={styles.timeText}>
+            {formatTime(position)} / {formatTime(duration)}
+          </Text>
         </View>
       </View>
 
+      {/* Progress Bar */}
+      <View style={styles.progressContainer}>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={duration > 0 ? duration : 1}
+          value={position}
+          minimumTrackTintColor="#007AFF"
+          maximumTrackTintColor="#444"
+          thumbTintColor="#fff"
+          onSlidingComplete={val => onSeek(val / duration)}
+          disabled={duration === 0}
+        />
+      </View>
+
+      {/* Controls Row */}
       <View style={styles.controls}>
         <TouchableOpacity onPress={onPrevious} style={styles.controlButton}>
-          <Ionicons name="play-skip-back" size={32} color="#007AFF" />
+          <Ionicons name="play-skip-back" size={20} color="#007AFF" />
         </TouchableOpacity>
+        
         <TouchableOpacity onPress={onPlayPause} style={styles.controlButton}>
-          <Ionicons name={isPlaying ? "pause-circle" : "play-circle"} size={48} color="#007AFF" />
+          <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="#007AFF" />
         </TouchableOpacity>
+        
         <TouchableOpacity onPress={onStop} style={styles.controlButton}>
-          <Ionicons name="stop-circle-outline" size={32} color="#007AFF" />
+          <Ionicons name="stop" size={20} color="#007AFF" />
         </TouchableOpacity>
+        
         <TouchableOpacity onPress={onNext} style={styles.controlButton}>
-          <Ionicons name="play-skip-forward" size={32} color="#007AFF" />
+          <Ionicons name="play-skip-forward" size={20} color="#007AFF" />
         </TouchableOpacity>
       </View>
     </View>
@@ -81,58 +109,50 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    padding: 12,
+    backgroundColor: '#181A20',
   },
-  albumArt: {
-    width: 200,
-    height: 200,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 100,
+  songInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  miniAlbumArt: {
+    width: 32,
+    height: 32,
+    backgroundColor: '#23242a',
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginRight: 12,
+  },
+  songTextContainer: {
+    flex: 1,
   },
   songTitle: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '600',
-    marginBottom: 20,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  progressBarContainer: {
-    width: '100%',
-    height: 32,
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  progressBar: {
-    position: 'absolute',
-    left: 0,
-    top: 14,
-    height: 4,
-    backgroundColor: '#007AFF',
-    borderRadius: 2,
-    zIndex: 1,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    color: '#fff',
+    marginBottom: 2,
   },
   timeText: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 11,
+    color: '#888',
+  },
+  progressContainer: {
+    marginBottom: 8,
+  },
+  slider: {
+    width: '100%',
+    height: 20,
   },
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
   },
   controlButton: {
-    marginHorizontal: 10,
+    marginHorizontal: 8,
+    padding: 4,
   },
 }); 

@@ -1,5 +1,5 @@
 import { Audio } from 'expo-av';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Song } from '../types/music';
 import { setupAudio } from '../utils/audioUtils';
 
@@ -11,9 +11,10 @@ export const useAudioPlayer = (playlist: Song[] = []) => {
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [duration, setDuration] = useState<number>(0);
   const [position, setPosition] = useState<number>(0);
+  const [onSongEnd, setOnSongEnd] = useState<(() => void) | null>(null);
 
-  const timerIdRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIdRef = useRef<number | null>(null);
+  const countdownRef = useRef<number | null>(null);
   const playlistRef = useRef<Song[]>(playlist);
 
   useEffect(() => {
@@ -31,14 +32,17 @@ export const useAudioPlayer = (playlist: Song[] = []) => {
     };
   }, [sound]);
 
-  const onPlaybackStatusUpdate = (status: any) => {
+  const onPlaybackStatusUpdate = useCallback((status: any) => {
     if (status.isLoaded && status.durationMillis) {
       setProgress(status.positionMillis / status.durationMillis);
       setDuration(status.durationMillis);
       setPosition(status.positionMillis);
       setIsPlaying(status.isPlaying);
+      if (status.didJustFinish && !status.isLooping && onSongEnd) {
+        onSongEnd();
+      }
     }
-  };
+  }, [onSongEnd]);
 
   const playMusic = async (song: Song) => {
     try {
@@ -149,5 +153,6 @@ export const useAudioPlayer = (playlist: Song[] = []) => {
     seekTo,
     playNext,
     playPrevious,
+    setOnSongEnd,
   };
 }; 
