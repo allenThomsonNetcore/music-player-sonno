@@ -19,27 +19,38 @@ interface MusicContextType {
   addSongToPlaylist: (playlistId: string, songId: string) => void;
   removeSongFromPlaylist: (playlistId: string, songId: string) => void;
   getSongsForPlaylist: (playlist: Playlist | null) => Song[];
+  getRecentlyPlayedSongs: () => Song[];
   refreshAllSongs: () => void;
+  recentlyPlayed: Song[];
+  setRecentlyPlayed: (songs: Song[] | ((prev: Song[]) => Song[])) => void;
 }
 
 const MusicContext = createContext<MusicContextType | undefined>(undefined);
 
 const PLAYLISTS_STORAGE_KEY = '@music_player_playlists';
+const RECENTLY_PLAYED_STORAGE_KEY = '@music_player_recently_played';
 
 export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [allSongs, setAllSongs] = useState<Song[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
+  const [recentlyPlayed, setRecentlyPlayed] = useState<Song[]>([]);
 
-  // Load playlists from storage on mount
+  // Load playlists and recently played from storage on mount
   useEffect(() => {
     loadPlaylists();
+    loadRecentlyPlayed();
   }, []);
 
   // Save playlists to storage whenever they change
   useEffect(() => {
     savePlaylists();
   }, [playlists]);
+
+  // Save recently played to storage whenever it changes
+  useEffect(() => {
+    saveRecentlyPlayed();
+  }, [recentlyPlayed]);
 
   const loadPlaylists = async () => {
     try {
@@ -63,6 +74,26 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const loadRecentlyPlayed = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(RECENTLY_PLAYED_STORAGE_KEY);
+      if (stored) {
+        const parsed: Song[] = JSON.parse(stored);
+        setRecentlyPlayed(parsed);
+      }
+    } catch (error) {
+      console.error('Error loading recently played:', error);
+    }
+  };
+
+  const saveRecentlyPlayed = async () => {
+    try {
+      await AsyncStorage.setItem(RECENTLY_PLAYED_STORAGE_KEY, JSON.stringify(recentlyPlayed));
+    } catch (error) {
+      console.error('Error saving recently played:', error);
+    }
+  };
+
   // Fetch all audio files on mount
   const refreshAllSongs = async () => {
     const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -74,6 +105,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       uri: asset.uri,
       duration: asset.duration
     }));
+    // Sort alphabetically by title
+    songs.sort((a, b) => a.title.localeCompare(b.title));
     setAllSongs(songs);
   };
 
@@ -112,8 +145,20 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const getSongsForPlaylist = (playlist: Playlist | null) => {
-    if (!playlist) return allSongs;
-    return allSongs.filter(song => playlist.songIds.includes(song.id));
+    let result: Song[];
+    if (!playlist) {
+      result = allSongs;
+    } else {
+      result = allSongs.filter(song => playlist.songIds.includes(song.id));
+    }
+    // Sort alphabetically by title
+    return [...result].sort((a, b) => a.title.localeCompare(b.title));
+  };
+
+  const getRecentlyPlayedSongs = () => {
+    // Only include songs that still exist in allSongs (in case files are deleted)
+    const allIds = new Set(allSongs.map(s => s.id));
+    return recentlyPlayed.filter(song => allIds.has(song.id));
   };
 
   return (
@@ -128,7 +173,10 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addSongToPlaylist,
         removeSongFromPlaylist,
         getSongsForPlaylist,
+        getRecentlyPlayedSongs,
         refreshAllSongs,
+        recentlyPlayed,
+        setRecentlyPlayed,
       }}
     >
       {children}

@@ -2,6 +2,7 @@ import { Audio } from 'expo-av';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Song } from '../types/music';
 import { setupAudio } from '../utils/audioUtils';
+import { useMusic } from './MusicContext';
 
 interface AudioPlayerContextType {
   currentSong: Song | null;
@@ -23,7 +24,7 @@ interface AudioPlayerContextType {
   scheduledStopTime: Date | null;
   setScheduledStopTime: (date: Date | null) => void;
   songList: Song[];
-  setSongList: (songs: Song[]) => void;
+  setSongList: (songs: Song[] | ((prev: Song[]) => Song[])) => void;
 }
 
 const AudioPlayerContext = createContext<AudioPlayerContextType | undefined>(undefined);
@@ -44,6 +45,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const currentSongIdRef = useRef<string | null>(null);
   const songListRef = useRef<Song[]>(songList);
   const currentSongRef = useRef<Song | null>(currentSong);
+
+  const { recentlyPlayed, setRecentlyPlayed } = useMusic();
 
   useEffect(() => { songListRef.current = songList; }, [songList]);
   useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
@@ -110,6 +113,11 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       setCurrentSong(song);
       setIsPlaying(true);
       
+      // Update recently played (most recent first, no duplicates, max 20)
+      setRecentlyPlayed((prev: Song[]) => {
+        const filtered = prev.filter((s: Song) => s.id !== song.id);
+        return [song, ...filtered].slice(0, 20);
+      });
       // Start countdown if timer is set but not running
       if (timeRemaining !== null && timeRemaining > 0 && !countdownRef.current) {
         console.log('Starting countdown for existing timer:', timeRemaining);
@@ -253,8 +261,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     
     const millis = minutes * 60000;
     timerIdRef.current = setTimeout(() => {
-      console.log('Timer finished, stopping music');
-      stopMusic();
+      console.log('Timer finished, fading out and stopping music');
+      fadeOutAndStop();
     }, millis);
     console.log('Timer started for', minutes, 'minutes');
   };
@@ -266,6 +274,32 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setScheduledStopTime(null);
     setProgress(0);
     setPosition(0);
+  };
+
+  // Smooth fade out and stop
+  const fadeOutAndStop = async (fadeDuration = 1500) => {
+    if (!sound) return;
+    try {
+      const steps = 15;
+      const stepTime = fadeDuration / steps;
+      let currentVolume = 1;
+      for (let i = 0; i < steps; i++) {
+        currentVolume = 1 - (i + 1) / steps;
+        await sound.setVolumeAsync(Math.max(currentVolume, 0));
+        await new Promise(res => setTimeout(res, stepTime));
+      }
+      await sound.stopAsync();
+      await sound.unloadAsync();
+      setSound(null);
+      setIsPlaying(false);
+      setProgress(0);
+      setPosition(0);
+      setTimeRemaining(null);
+    } catch (error) {
+      console.error('Error during fade out:', error);
+      // Fallback to hard stop
+      await stopMusic();
+    }
   };
 
   // Scheduled stop logic
@@ -280,8 +314,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     
     if (timeUntilStop > 0) {
       const timeout = setTimeout(() => {
-        console.log('Scheduled stop time reached, stopping music');
-        stopMusic();
+        console.log('Scheduled stop time reached, fading out and stopping music');
+        fadeOutAndStop();
         setScheduledStopTime(null);
       }, timeUntilStop);
       return () => clearTimeout(timeout);

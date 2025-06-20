@@ -1,62 +1,38 @@
-import { useFocusEffect } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAudioPlayer } from './hooks/AudioPlayerContext';
 import { useMusic } from './hooks/MusicContext';
 import { Song } from './types/music';
 
-export default function AllSongsScreen() {
-  const {
-    allSongs,
-    currentPlaylist,
-    getSongsForPlaylist,
-    setCurrentPlaylist,
-  } = useMusic();
-
-  const songList = getSongsForPlaylist(null); // Always get all songs
+export default function RecentlyPlayedScreen() {
+  const { getRecentlyPlayedSongs } = useMusic();
+  const songList = getRecentlyPlayedSongs();
   const { currentSong, playMusic, setSongList, stopMusicWithoutClearingTimer } = useAudioPlayer();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter songs based on search query
   const filteredSongs = songList
-    .filter(song => song.title.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => a.title.localeCompare(b.title));
-
-  // On tab focus, set the global player's songList to all songs
-  useFocusEffect(
-    React.useCallback(() => {
-      setSongList((prev: Song[]) => {
-        const prevIds = prev.map((s: Song) => s.id).join(',');
-        const newIds = songList.map((s: Song) => s.id).join(',');
-        if (prevIds !== newIds) {
-          return songList;
-        }
-        return prev;
-      });
-    }, [songList, setSongList])
-  );
+    .filter(song => song.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handlePlaySong = async (song: Song) => {
-    setSongList(songList);
+    setSongList(filteredSongs);
     await stopMusicWithoutClearingTimer();
     playMusic(song);
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>All Songs</Text>
-      
+      <Text style={styles.title}>Recently Played</Text>
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder="Search songs..."
+          placeholder="Search recently played..."
           placeholderTextColor="#888"
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
       </View>
-
       <FlatList
         data={filteredSongs}
         keyExtractor={item => item.id}
@@ -71,9 +47,10 @@ export default function AllSongsScreen() {
         )}
         ListEmptyComponent={
           <Text style={styles.emptyText}>
-            {searchQuery ? `No songs found matching "${searchQuery}"` : 'No songs found on device.'}
+            {searchQuery ? `No recently played songs matching "${searchQuery}"` : 'No recently played songs.'}
           </Text>
         }
+        style={{ flex: 1 }}
         contentContainerStyle={styles.listContent}
       />
     </View>
@@ -85,7 +62,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#181A20',
     padding: 20,
-    paddingTop: 20, // Reduced since SafeAreaView handles the notification area
+    paddingTop: 20,
   },
   searchContainer: {
     marginBottom: 20,
@@ -100,7 +77,7 @@ const styles = StyleSheet.create({
     borderColor: '#23242a',
   },
   listContent: {
-    paddingBottom: 20, // Reduced since no bottom tabs
+    paddingBottom: 20,
   },
   title: {
     fontSize: 22,

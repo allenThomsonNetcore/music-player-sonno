@@ -143,12 +143,12 @@ export const MusicPlayerBar: React.FC = () => {
           <View style={styles.statusContainer}>
             {scheduledStopTime && (
               <Text style={styles.statusText}>
-                ⏰ Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
+                ⏱ Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
               </Text>
             )}
             {timeRemaining !== null && timeRemaining > 0 && (
               <Text style={styles.statusText}>
-                ⏱️ Countdown: {formatTime(timeRemaining)}
+                ⏱ Countdown: {formatTime(timeRemaining)}
               </Text>
             )}
           </View>
@@ -203,32 +203,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   timerButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#23242a',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#444',
   },
   scheduleButton: {
-    backgroundColor: '#FF9500',
+    backgroundColor: '#23242a',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#444',
   },
   clearButton: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#23242a',
     borderRadius: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#444',
   },
   buttonText: {
-    color: 'white',
+    color: '#007AFF',
     fontWeight: '600',
     fontSize: 12,
   },
   clearButtonText: {
-    color: '#fff',
+    color: '#007AFF',
     fontWeight: '600',
     fontSize: 12,
   },

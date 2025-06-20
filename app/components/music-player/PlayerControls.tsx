@@ -88,19 +88,19 @@ export const PlayerControls: React.FC<PlayerControlsProps> = ({
       {/* Controls Row */}
       <View style={styles.controls}>
         <TouchableOpacity onPress={onPrevious} style={styles.controlButton}>
-          <Ionicons name="play-skip-back" size={20} color="#007AFF" />
+          <Ionicons name="play-skip-back" size={22} color={isPlaying ? '#007AFF' : '#444'} />
         </TouchableOpacity>
         
         <TouchableOpacity onPress={onPlayPause} style={styles.controlButton}>
-          <Ionicons name={isPlaying ? "pause" : "play"} size={24} color="#007AFF" />
+          <Ionicons name={isPlaying ? "pause" : "play"} size={28} color="#007AFF" />
         </TouchableOpacity>
         
         <TouchableOpacity onPress={onStop} style={styles.controlButton}>
-          <Ionicons name="stop" size={20} color="#007AFF" />
+          <Ionicons name="stop" size={22} color="#007AFF" />
         </TouchableOpacity>
         
         <TouchableOpacity onPress={onNext} style={styles.controlButton}>
-          <Ionicons name="play-skip-forward" size={20} color="#007AFF" />
+          <Ionicons name="play-skip-forward" size={22} color={isPlaying ? '#007AFF' : '#444'} />
         </TouchableOpacity>
       </View>
     </View>
@@ -153,6 +153,12 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     marginHorizontal: 8,
-    padding: 4,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#23242a',
+  },
+  playingText: {
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
 }); 

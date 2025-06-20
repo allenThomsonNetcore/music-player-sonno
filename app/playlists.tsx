@@ -43,6 +43,8 @@ export default function PlaylistsScreen() {
   console.log('Playlists:', playlists);
   console.log('SelectedPlaylist:', selectedPlaylist);
   const selectedPlaylistSongs = selectedPlaylist ? getSongsForPlaylist(selectedPlaylist) : [];
+  // Sort playlist songs alphabetically
+  const sortedPlaylistSongs = [...selectedPlaylistSongs].sort((a, b) => a.title.localeCompare(b.title));
   console.log('SelectedPlaylistSongs:', selectedPlaylistSongs);
 
   // Filter available songs for adding to playlist
@@ -50,9 +52,9 @@ export default function PlaylistsScreen() {
     ? allSongs.filter(song => !selectedPlaylist.songIds.includes(song.id))
     : [];
   
-  const filteredAvailableSongs = availableSongs.filter(song =>
-    song.title.toLowerCase().includes(addSongsSearchQuery.toLowerCase())
-  );
+  const filteredAvailableSongs = availableSongs
+    .filter(song => song.title.toLowerCase().includes(addSongsSearchQuery.toLowerCase()))
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   const handleCreatePlaylist = () => {
     if (!newPlaylistName.trim()) return;
@@ -130,7 +132,7 @@ export default function PlaylistsScreen() {
         </View>
         {selectedPlaylistSongs.length > 0 ? (
           <FlatList
-            data={selectedPlaylistSongs}
+            data={sortedPlaylistSongs}
             keyExtractor={item => item.id}
             renderItem={({ item }) => (
               <View style={[styles.songRow, currentSong?.id === item.id && styles.currentSongRow]}>

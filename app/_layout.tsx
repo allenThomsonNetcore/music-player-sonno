@@ -1,6 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from "expo-router";
 import { StatusBar } from 'expo-status-bar';
-import { Text } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MusicPlayerBar } from './components/music-player/MusicPlayerBar';
@@ -41,16 +41,25 @@ export default function RootLayout() {
                   options={{ 
                     title: "All Songs",
                     tabBarIcon: ({ color }) => (
-                      <Text style={{ color, fontSize: 20 }}>🎵</Text>
+                      <Ionicons name="musical-notes-outline" size={22} color={color} />
                     ),
                   }} 
+                />
+                <Tabs.Screen
+                  name="recently-played"
+                  options={{
+                    title: "Recently Played",
+                    tabBarIcon: ({ color }) => (
+                      <Ionicons name="time-outline" size={22} color={color} />
+                    ),
+                  }}
                 />
                 <Tabs.Screen 
                   name="playlists" 
                   options={{ 
                     title: "Playlists",
                     tabBarIcon: ({ color }) => (
-                      <Text style={{ color, fontSize: 20 }}>📋</Text>
+                      <Ionicons name="list-outline" size={22} color={color} />
                     ),
                   }} 
                 />
