@@ -41,6 +41,7 @@ export default function RootLayout() {
           Capability.Stop,
           Capability.SeekTo,
         ],
+      
       });
       await TrackPlayer.play();
     }

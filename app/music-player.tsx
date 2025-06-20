@@ -68,7 +68,7 @@ export default function AllSongsScreen() {
            <Text style={[styles.songTitle, currentSong?.id === item.id && styles.playingText]} numberOfLines={1}>
               {item.title}
             </Text>
-            {currentSong?.id === item.id && <Text style={styles.playingText}>*</Text>}
+            {currentSong?.id === item.id && <Text style={styles.playingText}></Text>}
           </TouchableOpacity>
         )}
         ListEmptyComponent={
