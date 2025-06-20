@@ -10,11 +10,11 @@ import { MusicProvider } from "./hooks/MusicContext";
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+    <StatusBar style="light" backgroundColor="#181A20" translucent={false} />
       <GestureHandlerRootView style={{ flex: 1 }}>
         <MusicProvider>
           <AudioPlayerProvider>
-            <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: '#181A20' }} edges={['top', 'left', 'right']}>
               <Tabs
                 screenOptions={{
                   tabBarPosition: 'top',

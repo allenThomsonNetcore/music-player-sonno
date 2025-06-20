@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "music",
+    "name": "Sleep music",
     "slug": "music",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#181A20"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.allenthomsonnetcore.music"
@@ -32,7 +32,7 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#181A20"
         }
       ],
       "expo-web-browser"
