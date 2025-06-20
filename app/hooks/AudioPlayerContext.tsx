@@ -1,7 +1,13 @@
-import { Audio } from 'expo-av';
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import TrackPlayer, {
+  Event,
+  State as TrackPlayerState,
+  usePlaybackState,
+  useProgress,
+  useTrackPlayerEvents
+} from 'react-native-track-player';
 import { Song } from '../types/music';
-import { setupAudio } from '../utils/audioUtils';
 import { useMusic } from './MusicContext';
 
 interface AudioPlayerContextType {
@@ -30,298 +36,235 @@ interface AudioPlayerContextType {
 const AudioPlayerContext = createContext<AudioPlayerContextType | undefined>(undefined);
 
 export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [position, setPosition] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [scheduledStopTime, setScheduledStopTime] = useState<Date | null>(null);
   const [songList, setSongList] = useState<Song[]>([]);
 
   const timerIdRef = useRef<any>(null);
   const countdownRef = useRef<any>(null);
-  const currentSongIdRef = useRef<string | null>(null);
   const songListRef = useRef<Song[]>(songList);
   const currentSongRef = useRef<Song | null>(currentSong);
+  const isSettingTrack = useRef(false);
 
   const { recentlyPlayed, setRecentlyPlayed } = useMusic();
+
+  // TrackPlayer hooks
+  const playbackState = usePlaybackState();
+  const { position, duration } = useProgress(250);
+
+  const pendingTimer = useRef<number | null>(null);
 
   useEffect(() => { songListRef.current = songList; }, [songList]);
   useEffect(() => { currentSongRef.current = currentSong; }, [currentSong]);
 
+  // Update isPlaying based on TrackPlayer state
+  const isPlaying = (typeof playbackState === 'object' ? playbackState.state : playbackState) === TrackPlayerState.Playing;
+  const progress = duration > 0 ? position / duration : 0;
+
+  // Listen for track change events to update currentSong
+  useTrackPlayerEvents([Event.PlaybackTrackChanged], async (event) => {
+    if (isSettingTrack.current) return;
+
+    if (event.type === Event.PlaybackTrackChanged && event.nextTrack != null) {
+      const track = await TrackPlayer.getTrack(event.nextTrack);
+      if (track && track.id) {
+        const song = songListRef.current.find(s => s.id === track.id);
+        if (song && song.id !== currentSongRef.current?.id) {
+          setCurrentSong(song);
+        }
+      }
+    }
+  });
+
+  // On mount, restore last played song
   useEffect(() => {
-    setupAudio();
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
+    AsyncStorage.getItem('lastPlayedSong').then(data => {
+      if (data) {
+        setCurrentSong(JSON.parse(data));
       }
-      if (timerIdRef.current) clearTimeout(timerIdRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    });
   }, []);
 
-  const playNextRef = useRef<() => Promise<void>>(async () => {});
-  playNextRef.current = async () => {
-    const list = songListRef.current;
-    const song = currentSongRef.current;
-    if (!list.length || !song) return;
-    const idx = list.findIndex(s => s.id === song.id);
-    if (idx >= 0 && idx < list.length - 1) {
-      await playMusic(list[idx + 1]);
-    }
-  };
-
-  const onPlaybackStatusUpdate = useCallback((status: any) => {
-    if (status.isLoaded && status.durationMillis) {
-      setProgress(status.positionMillis / status.durationMillis);
-      setDuration(status.durationMillis);
-      setPosition(status.positionMillis);
-      setIsPlaying(status.isPlaying);
-      if (
-        status.didJustFinish &&
-        !status.isLooping &&
-        currentSongRef.current &&
-        currentSongIdRef.current === currentSongRef.current.id
-      ) {
-        // Debug log
-        console.log('Auto-advance: calling playNext');
-        playNextRef.current();
-      }
-    }
-  }, []);
-
+  // Play a song (replace queue with songList, skip to selected song)
   const playMusic = async (song: Song) => {
+    const playbackState = await TrackPlayer.getState();
+    if (
+      (playbackState === TrackPlayerState.Paused || playbackState === TrackPlayerState.Ready) &&
+      currentSong?.id === song.id
+    ) {
+      await TrackPlayer.play();
+      return;
+    }
+
+    console.log('TrackPlayer.playMusic called for', song.title);
+    setCurrentSong(song); // Optimistically update UI
+    isSettingTrack.current = true;
     try {
-      // Debug log
-      console.log('playMusic called for', song.title);
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        // Debug log
-        console.log('Previous sound unloaded');
+      // Replace queue with current songList
+      await TrackPlayer.reset();
+      await TrackPlayer.add(songListRef.current.map(s => ({
+        id: s.id,
+        url: s.uri,
+        title: s.title,
+        artist: '',
+        duration: s.duration ? s.duration / 1000 : undefined,
+      })));
+      const idx = songListRef.current.findIndex(s => s.id === song.id);
+      if (idx >= 0) {
+        await TrackPlayer.skip(idx);
       }
-      currentSongIdRef.current = song.id;
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: song.uri },
-        { shouldPlay: true },
-        onPlaybackStatusUpdate
-      );
-      setSound(newSound);
-      setCurrentSong(song);
-      setIsPlaying(true);
-      
-      // Update recently played (most recent first, no duplicates, max 20)
+      await TrackPlayer.play();
+
+      // Persist last played song
+      AsyncStorage.setItem('lastPlayedSong', JSON.stringify(song));
+      // Update recently played
       setRecentlyPlayed((prev: Song[]) => {
         const filtered = prev.filter((s: Song) => s.id !== song.id);
         return [song, ...filtered].slice(0, 20);
       });
-      // Start countdown if timer is set but not running
-      if (timeRemaining !== null && timeRemaining > 0 && !countdownRef.current) {
-        console.log('Starting countdown for existing timer:', timeRemaining);
-        countdownRef.current = setInterval(() => {
-          setTimeRemaining((prev) => {
-            console.log('Timer countdown:', prev);
-            if (prev === null || prev <= 0) {
-              if (countdownRef.current) clearInterval(countdownRef.current);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
-      
-      // Debug log
-      console.log('New sound created and playing:', song.title);
     } catch (error) {
-      console.error('Error playing sound:', error);
+      console.error('Error playing song:', error);
       throw error;
+    } finally {
+      isSettingTrack.current = false;
     }
   };
 
   const pauseMusic = async () => {
-    if (sound) {
-      await sound.pauseAsync();
-      setIsPlaying(false);
-      
-      // Pause countdown when music is paused
-      if (countdownRef.current) {
-        clearInterval(countdownRef.current);
-        countdownRef.current = null;
-      }
-    }
+    await TrackPlayer.pause();
   };
 
   const resumeMusic = async () => {
-    if (sound) {
-      await sound.playAsync();
-      setIsPlaying(true);
-      
-      // Resume countdown if timer is set
-      if (timeRemaining !== null && timeRemaining > 0 && !countdownRef.current) {
-        console.log('Resuming countdown for timer:', timeRemaining);
-        countdownRef.current = setInterval(() => {
-          setTimeRemaining((prev) => {
-            console.log('Timer countdown:', prev);
-            if (prev === null || prev <= 0) {
-              if (countdownRef.current) clearInterval(countdownRef.current);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      }
-    }
+    await TrackPlayer.play();
   };
 
   const stopMusic = async () => {
-    try {
-      // Debug log
-      console.log('stopMusic called');
-      if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
-        setIsPlaying(false);
-        // Debug log
-        console.log('Sound stopped and unloaded');
-      }
-      if (timerIdRef.current) clearTimeout(timerIdRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      setTimeRemaining(null);
-      setProgress(0);
-      setPosition(0);
-    } catch (error) {
-      console.error('Error stopping music:', error);
-      throw error;
-    }
+    await TrackPlayer.stop();
+    setCurrentSong(null);
   };
 
   const stopMusicWithoutClearingTimer = async () => {
-    try {
-      // Debug log
-      console.log('stopMusicWithoutClearingTimer called');
-      if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
-        setIsPlaying(false);
-        // Debug log
-        console.log('Sound stopped and unloaded');
-      }
-      // Don't clear timer state - preserve timeRemaining, progress, and position
-      setProgress(0);
-      setPosition(0);
-    } catch (error) {
-      console.error('Error stopping music without clearing timer:', error);
-      throw error;
-    }
+    await TrackPlayer.stop();
   };
 
   const seekTo = async (millis: number) => {
-    if (sound) {
-      await sound.setPositionAsync(millis);
+    await TrackPlayer.seekTo(millis / 1000);
+  };
+
+  const playNext = async () => {
+    try {
+      await TrackPlayer.skipToNext();
+      await TrackPlayer.play();
+    } catch (e) {
+      // No next track
     }
   };
 
   const playPrevious = async () => {
-    if (!songList.length || !currentSong) return;
-    const idx = songList.findIndex(s => s.id === currentSong.id);
-    if (idx > 0) {
-      await playMusic(songList[idx - 1]);
+    try {
+      await TrackPlayer.skipToPrevious();
+      await TrackPlayer.play();
+    } catch (e) {
+      // No previous track
     }
   };
 
-  const startTimer = async (minutes: number) => {
-    console.log('startTimer called with', minutes, 'minutes, isPlaying:', isPlaying);
-    
-    // Clear any existing scheduled stop time when starting countdown timer
-    setScheduledStopTime(null);
-    
-    const seconds = minutes * 60;
-    setTimeRemaining(seconds);
+  // Fade out and stop for TrackPlayer
+  const fadeOutAndStop = async (fadeDuration = 2000) => {
+    try {
+      const initialVolume = await TrackPlayer.getVolume();
+      if (initialVolume === 0) return; // Already faded or fading
+
+      const steps = 20;
+      const stepTime = fadeDuration / steps;
+      const volumeStep = initialVolume / steps;
+      let currentVolume = initialVolume;
+
+      for (let i = 0; i < steps; i++) {
+        currentVolume -= volumeStep;
+        if (currentVolume < 0) currentVolume = 0;
+        await TrackPlayer.setVolume(currentVolume);
+        await new Promise(res => setTimeout(res, stepTime));
+      }
+      await TrackPlayer.pause();
+      await TrackPlayer.setVolume(initialVolume); // Restore volume for next play
+    } catch (e) {
+      await TrackPlayer.pause(); // Fallback to just pausing
+    }
+  };
+
+  // Timer logic (updated)
+  const fadeDuration = 1000; // 1 second
+
+  const startCountdown = (minutes: number) => {
     if (timerIdRef.current) clearTimeout(timerIdRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
-    
-    // Only start countdown if music is currently playing
-    if (isPlaying) {
-      countdownRef.current = setInterval(() => {
-        setTimeRemaining((prev) => {
-          console.log('Timer countdown:', prev);
-          if (prev === null || prev <= 0) {
-            if (countdownRef.current) clearInterval(countdownRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    
+
     const millis = minutes * 60000;
+    const endTime = Date.now() + millis;
+
+    // Set up the interval to decrement the UI
+    countdownRef.current = setInterval(() => {
+      const remainingMillis = endTime - Date.now();
+      setTimeRemaining(Math.ceil(remainingMillis / 1000));
+
+      if (remainingMillis <= 0) {
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        setTimeRemaining(0);
+      }
+    }, 1000);
+
+    // Set up the timeout to actually stop the music
     timerIdRef.current = setTimeout(() => {
-      console.log('Timer finished, fading out and stopping music');
-      fadeOutAndStop();
-    }, millis);
-    console.log('Timer started for', minutes, 'minutes');
+      // The UI interval will clear itself when the countdown reaches zero.
+      fadeOutAndStop(fadeDuration);
+    }, Math.max(0, millis - fadeDuration));
   };
+
+  const startTimer = async (minutes: number) => {
+    setScheduledStopTime(null);
+    const seconds = minutes * 60;
+    setTimeRemaining(seconds); // Set UI immediately
+
+    if (isPlaying) {
+      startCountdown(minutes);
+    } else {
+      // Save the pending timer if not playing yet
+      pendingTimer.current = minutes;
+    }
+  };
+
+  // Watch for playback start to trigger pending timer
+  useEffect(() => {
+    if (isPlaying && pendingTimer.current) {
+      startCountdown(pendingTimer.current);
+      pendingTimer.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying]);
 
   const clearTimer = () => {
     if (timerIdRef.current) clearTimeout(timerIdRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
     setTimeRemaining(null);
     setScheduledStopTime(null);
-    setProgress(0);
-    setPosition(0);
+    pendingTimer.current = null; // Clear any pending timer
   };
 
-  // Smooth fade out and stop
-  const fadeOutAndStop = async (fadeDuration = 1500) => {
-    if (!sound) return;
-    try {
-      const steps = 15;
-      const stepTime = fadeDuration / steps;
-      let currentVolume = 1;
-      for (let i = 0; i < steps; i++) {
-        currentVolume = 1 - (i + 1) / steps;
-        await sound.setVolumeAsync(Math.max(currentVolume, 0));
-        await new Promise(res => setTimeout(res, stepTime));
-      }
-      await sound.stopAsync();
-      await sound.unloadAsync();
-      setSound(null);
-      setIsPlaying(false);
-      setProgress(0);
-      setPosition(0);
-      setTimeRemaining(null);
-    } catch (error) {
-      console.error('Error during fade out:', error);
-      // Fallback to hard stop
-      await stopMusic();
-    }
-  };
-
-  // Scheduled stop logic
+  // Scheduled stop logic (updated)
   useEffect(() => {
     if (!scheduledStopTime) return;
-    
     const now = new Date();
     const timeUntilStop = scheduledStopTime.getTime() - now.getTime();
-    
-    console.log('Schedule time set for:', scheduledStopTime.toLocaleTimeString());
-    console.log('Time until stop:', timeUntilStop, 'ms');
-    
     if (timeUntilStop > 0) {
-      const timeout = setTimeout(() => {
-        console.log('Scheduled stop time reached, fading out and stopping music');
-        fadeOutAndStop();
+      // Start fade-out fadeDuration ms before scheduled stop
+      const fadeTimeout = setTimeout(() => {
+        fadeOutAndStop(fadeDuration);
         setScheduledStopTime(null);
-      }, timeUntilStop);
-      return () => clearTimeout(timeout);
+      }, Math.max(0, timeUntilStop - fadeDuration));
+      return () => clearTimeout(fadeTimeout);
     } else {
-      // If the scheduled time is in the past, clear it
-      console.log('Scheduled time is in the past, clearing');
       setScheduledStopTime(null);
     }
   }, [scheduledStopTime]);
@@ -332,8 +275,8 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         currentSong,
         isPlaying,
         progress,
-        duration,
-        position,
+        duration: duration * 1000, // convert to ms
+        position: position * 1000, // convert to ms
         timeRemaining,
         playMusic,
         pauseMusic,
@@ -341,7 +284,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         stopMusic,
         stopMusicWithoutClearingTimer,
         seekTo,
-        playNext: playNextRef.current,
+        playNext,
         playPrevious,
         startTimer,
         clearTimer,

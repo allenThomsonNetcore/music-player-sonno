@@ -65,7 +65,9 @@ export default function AllSongsScreen() {
             style={[styles.songRow, currentSong?.id === item.id && styles.currentSongRow]}
             onPress={() => handlePlaySong(item)}
           >
-            <Text style={styles.songTitle}>{item.title}</Text>
+           <Text style={[styles.songTitle, currentSong?.id === item.id && styles.playingText]} numberOfLines={1}>
+              {item.title}
+            </Text>
             {currentSong?.id === item.id && <Text style={styles.playingText}>*</Text>}
           </TouchableOpacity>
         )}
@@ -127,7 +129,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   playingText: {
-    color: '#4CAF50',
+ 
     fontWeight: 'bold',
   },
   emptyText: {

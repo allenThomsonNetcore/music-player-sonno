@@ -43,7 +43,7 @@ export const MusicPlayerBar: React.FC = () => {
       await pauseMusic();
     } else {
       if (currentSong) {
-        await resumeMusic();
+        await playMusic(currentSong);
       }
     }
   };
@@ -58,25 +58,21 @@ export const MusicPlayerBar: React.FC = () => {
   };
 
   const handleScheduleStop = (event: any, selectedDate?: Date) => {
-    console.log('handleScheduleStop called, event:', event, 'selectedDate:', selectedDate);
     setShowTimePicker(false);
-    if (selectedDate) {
+
+    // For iOS/Android compatibility, check event.type or event.nativeEvent.type
+    const eventType = event?.type || event?.nativeEvent?.type;
+
+    if (eventType === 'set' && selectedDate) {
       const now = new Date();
       const timeUntilStop = selectedDate.getTime() - now.getTime();
-      
-      console.log('Schedule time selected:', selectedDate.toLocaleTimeString());
-      console.log('Time until stop:', timeUntilStop, 'ms');
-      
+
       if (timeUntilStop > 0) {
-        // Clear any existing countdown timer when setting schedule
         clearAudioTimer();
         setScheduledStopTime(selectedDate);
-        console.log('Schedule time set successfully');
-      } else {
-        console.log('Selected time is in the past, ignoring');
-        // You could show an alert here if you want to notify the user
       }
     }
+    // If eventType is 'dismissed' or not 'set', do nothing
   };
 
   const handleScheduleButtonPress = () => {
