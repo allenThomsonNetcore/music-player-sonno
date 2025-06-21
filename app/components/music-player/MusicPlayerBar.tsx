@@ -24,6 +24,8 @@ export const MusicPlayerBar: React.FC = () => {
     scheduledStopTime,
     setScheduledStopTime,
     clearTimer: clearAudioTimer,
+    testBackgroundTimer,
+    activateScheduledStop,
   } = useAudioPlayer();
 
   const [timerInput, setTimerInput] = useState('');
@@ -94,6 +96,12 @@ export const MusicPlayerBar: React.FC = () => {
     setTimerInput('');
   };
 
+  const clearCountdownTimer = () => {
+    console.log('Clearing countdown timer only');
+    clearAudioTimer(false); // Don't clear scheduled timers
+    setTimerInput('');
+  };
+
   return (
     <>
       <View style={styles.stickyBar}>
@@ -128,8 +136,11 @@ export const MusicPlayerBar: React.FC = () => {
             <TouchableOpacity style={styles.scheduleButton} onPress={handleScheduleButtonPress}>
               <Text style={styles.buttonText}>Schedule</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.clearButton} onPress={clearTimer}>
+            <TouchableOpacity style={styles.clearButton} onPress={timeRemaining ? clearCountdownTimer : clearTimer}>
               <Text style={styles.clearButtonText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.testButton} onPress={testBackgroundTimer}>
+              <Text style={styles.testButtonText}>Test</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -138,9 +149,16 @@ export const MusicPlayerBar: React.FC = () => {
         {(scheduledStopTime || timeRemaining !== null) && (
           <View style={styles.statusContainer}>
             {scheduledStopTime && (
-              <Text style={styles.statusText}>
-                ⏱ Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
-              </Text>
+              <View style={styles.scheduledStatusRow}>
+                <Text style={styles.statusText}>
+                  ⏱ Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
+                </Text>
+                {!timeRemaining && (
+                  <TouchableOpacity style={styles.startScheduledButton} onPress={activateScheduledStop}>
+                    <Text style={styles.startScheduledButtonText}>Start</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
             {timeRemaining !== null && timeRemaining > 0 && (
               <Text style={styles.statusText}>
@@ -224,12 +242,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#444',
   },
+  testButton: {
+    backgroundColor: '#23242a',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
   buttonText: {
     color: '#007AFF',
     fontWeight: '600',
     fontSize: 12,
   },
   clearButtonText: {
+    color: '#007AFF',
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  testButtonText: {
     color: '#007AFF',
     fontWeight: '600',
     fontSize: 12,
@@ -242,10 +274,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     borderRadius: 6,
   },
+  scheduledStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   statusText: {
     fontSize: 12,
     color: '#fff',
     textAlign: 'center',
     fontWeight: '500',
+  },
+  startScheduledButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginLeft: 8,
+  },
+  startScheduledButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 12,
   },
 }); 

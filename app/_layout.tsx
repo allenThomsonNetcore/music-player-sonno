@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import TrackPlayer, { Capability } from 'react-native-track-player';
+import TrackPlayer, { AppKilledPlaybackBehavior, Capability } from 'react-native-track-player';
 import { MusicPlayerBar } from './components/music-player/MusicPlayerBar';
 import { AudioPlayerProvider } from "./hooks/AudioPlayerContext";
 import { MusicProvider } from "./hooks/MusicContext";
@@ -27,6 +27,8 @@ export default function RootLayout() {
           Capability.SkipToPrevious,
           Capability.Stop,
           Capability.SeekTo,
+          Capability.JumpForward,
+          Capability.JumpBackward,
         ],
         compactCapabilities: [
           Capability.Play,
@@ -40,9 +42,14 @@ export default function RootLayout() {
           Capability.SkipToPrevious,
           Capability.Stop,
           Capability.SeekTo,
+          Capability.JumpForward,
+          Capability.JumpBackward,
         ],
-      
+        android: {
+          appKilledPlaybackBehavior: AppKilledPlaybackBehavior.StopPlaybackAndRemoveNotification,
+        },
       });
+      console.log('✅ TrackPlayer setup completed with seek capabilities');
       await TrackPlayer.play();
     }
     async function requestNotificationPermission() {
