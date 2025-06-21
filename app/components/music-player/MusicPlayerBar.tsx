@@ -51,12 +51,18 @@ export const MusicPlayerBar: React.FC = () => {
   };
 
   const handleTimerStart = async () => {
-    if (!timerInput) return;
-    const minutes = parseInt(timerInput);
-    if (isNaN(minutes) || minutes <= 0) return;
-    console.log('Starting timer for', minutes, 'minutes');
-    await startTimer(minutes);
-    setTimerInput(''); // Clear input after starting
+    if (timerInput) {
+      // Handle countdown timer
+      const minutes = parseInt(timerInput);
+      if (isNaN(minutes) || minutes <= 0) return;
+      console.log('Starting timer for', minutes, 'minutes');
+      await startTimer(minutes);
+      setTimerInput(''); // Clear input after starting
+    } else if (scheduledStopTime && !timeRemaining) {
+      // Handle scheduled stop activation
+      console.log('Activating scheduled stop');
+      activateScheduledStop();
+    }
   };
 
   const handleScheduleStop = (event: any, selectedDate?: Date) => {
@@ -130,8 +136,20 @@ export const MusicPlayerBar: React.FC = () => {
               value={timerInput}
               onChangeText={setTimerInput}
             />
-            <TouchableOpacity style={styles.timerButton} onPress={handleTimerStart}>
-              <Text style={styles.buttonText}>Start</Text>
+            <TouchableOpacity 
+              style={[
+                styles.timerButton, 
+                (!timerInput && !scheduledStopTime) && styles.disabledButton
+              ]} 
+              onPress={handleTimerStart}
+              disabled={!timerInput && !scheduledStopTime}
+            >
+              <Text style={[
+                styles.buttonText,
+                (!timerInput && !scheduledStopTime) && styles.disabledButtonText
+              ]}>
+                {timerInput ? 'Start Timer' : (scheduledStopTime && !timeRemaining ? 'Start Schedule' : 'Start')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.scheduleButton} onPress={handleScheduleButtonPress}>
               <Text style={styles.buttonText}>Schedule</Text>
@@ -139,9 +157,11 @@ export const MusicPlayerBar: React.FC = () => {
             <TouchableOpacity style={styles.clearButton} onPress={timeRemaining ? clearCountdownTimer : clearTimer}>
               <Text style={styles.clearButtonText}>Clear</Text>
             </TouchableOpacity>
+            {/* Test button - uncomment for debugging
             <TouchableOpacity style={styles.testButton} onPress={testBackgroundTimer}>
               <Text style={styles.testButtonText}>Test</Text>
             </TouchableOpacity>
+            */}
           </View>
         </View>
         
@@ -153,11 +173,6 @@ export const MusicPlayerBar: React.FC = () => {
                 <Text style={styles.statusText}>
                   ⏱ Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
                 </Text>
-                {!timeRemaining && (
-                  <TouchableOpacity style={styles.startScheduledButton} onPress={activateScheduledStop}>
-                    <Text style={styles.startScheduledButtonText}>Start</Text>
-                  </TouchableOpacity>
-                )}
               </View>
             )}
             {timeRemaining !== null && timeRemaining > 0 && (
@@ -286,16 +301,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     flex: 1,
   },
-  startScheduledButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginLeft: 8,
+  disabledButton: {
+    backgroundColor: '#444',
   },
-  startScheduledButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 12,
+  disabledButtonText: {
+    color: '#888',
   },
 }); 
