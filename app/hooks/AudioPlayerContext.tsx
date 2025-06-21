@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { Alert, AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus } from 'react-native';
 import BackgroundTimer from 'react-native-background-timer';
 import TrackPlayer, {
   Event,
@@ -211,31 +211,77 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
+  // Fade out and pause for TrackPlayer (preserves position)
+  const fadeOutAndPause = async (fadeDuration = 3000) => {
+    console.log(`[FADE] Starting fade out over ${fadeDuration}ms`);
+    isFadingOut.current = true;
+    
+    try {
+      // Ensure background timer is started for reliable execution
+      if (!backgroundTimerStarted.current) {
+        BackgroundTimer.start();
+        backgroundTimerStarted.current = true;
+        console.log('[FADE] Background timer started for fade-out');
+      }
+      
+      const initialVolume = await TrackPlayer.getVolume();
+      console.log(`[FADE] Initial volume: ${initialVolume}`);
+      if (initialVolume === 0) {
+        console.log('[FADE] Volume already 0, just pausing');
+        await TrackPlayer.pause();
+        isFadingOut.current = false;
+        return;
+      }
+
+      const steps = 20;
+      const stepTime = fadeDuration / steps;
+      const volumeStep = initialVolume / steps;
+      let currentVolume = initialVolume;
+      console.log(`[FADE] Fade steps: ${steps}, step time: ${stepTime}ms, volume step: ${volumeStep}`);
+
+      // Use BackgroundTimer for reliable background execution
+      for (let i = 0; i < steps; i++) {
+        currentVolume -= volumeStep;
+        if (currentVolume < 0) currentVolume = 0;
+        await TrackPlayer.setVolume(currentVolume);
+        console.log(`[FADE] Step ${i + 1}/${steps}: volume = ${currentVolume.toFixed(3)}`);
+        
+        // Use BackgroundTimer.setTimeout instead of regular setTimeout
+        await new Promise<void>(res => {
+          BackgroundTimer.setTimeout(() => res(), stepTime);
+        });
+      }
+      console.log('[FADE] Fade complete, pausing and restoring volume');
+      await TrackPlayer.pause();
+      await TrackPlayer.setVolume(initialVolume); // Restore volume for next play
+      console.log(`[FADE] Volume restored to ${initialVolume}`);
+    } catch (e) {
+      console.error('[FADE] Error during fade out:', e);
+      await TrackPlayer.pause(); // Fallback to just pausing
+    } finally {
+      isFadingOut.current = false;
+      console.log('[FADE] Fade out process completed');
+    }
+  };
+
   // Force stop music immediately (more reliable than fade out)
   const forceStopMusic = async () => {
     console.log('[FORCE_STOP] Force stopping music');
     isFadingOut.current = true;
     
     try {
-      // Pause the music instead of stopping to preserve position
-      await TrackPlayer.pause();
-      console.log('[FORCE_STOP] Music paused successfully');
-      
-      // Show an alert to notify the user
-      Alert.alert(
-        'Timer Complete',
-        'Your music timer has finished and the music has been paused.',
-        [{ text: 'OK', onPress: () => console.log('[FORCE_STOP] Alert dismissed') }]
-      );
+      // Use fade out instead of immediate pause for better UX
+      await fadeOutAndPause(3000);
+      console.log('[FORCE_STOP] Music faded out and paused successfully');
       
     } catch (e) {
-      console.error('[FORCE_STOP] Error pausing music:', e);
-      // Try stop as fallback
+      console.error('[FORCE_STOP] Error during fade out:', e);
+      // Try pause as fallback
       try {
-        await TrackPlayer.stop();
-        console.log('[FORCE_STOP] Music stopped as fallback');
-      } catch (stopError) {
-        console.error('[FORCE_STOP] Even stop failed:', stopError);
+        await TrackPlayer.pause();
+        console.log('[FORCE_STOP] Music paused as fallback');
+      } catch (pauseError) {
+        console.error('[FORCE_STOP] Even pause failed:', pauseError);
       }
     } finally {
       isFadingOut.current = false;
@@ -254,8 +300,29 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       return;
     }
     
-    // Clear any existing timers
-    clearTimer();
+    // Clear existing timers but preserve the timeRemaining state
+    if (timerIdRef.current) {
+      console.log('[BACKGROUND_TIMER] Clearing existing main timer');
+      BackgroundTimer.clearTimeout(timerIdRef.current);
+      timerIdRef.current = null;
+    }
+    
+    if (countdownRef.current) {
+      console.log('[BACKGROUND_TIMER] Clearing existing countdown interval');
+      BackgroundTimer.clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    
+    // Only stop background timer if we're not fading out
+    if (backgroundTimerStarted.current && !isFadingOut.current) {
+      stopBackgroundTimer();
+    }
+    
+    // Clear scheduled timers but keep timeRemaining
+    setScheduledStopTime(null);
+    setIsScheduledStopActive(false);
+    pendingTimer.current = null;
+    timerEndTime.current = null;
     
     const totalMillis = minutes * 60 * 1000;
     const endTime = Date.now() + totalMillis;

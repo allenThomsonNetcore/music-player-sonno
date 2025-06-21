@@ -277,12 +277,14 @@ const styles = StyleSheet.create({
   scheduledStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   statusText: {
     fontSize: 12,
     color: '#fff',
     textAlign: 'center',
     fontWeight: '500',
+    flex: 1,
   },
   startScheduledButton: {
     backgroundColor: '#007AFF',
