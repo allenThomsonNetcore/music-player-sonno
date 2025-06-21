@@ -1,6 +1,7 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAudioPlayer } from './hooks/AudioPlayerContext';
 import { Playlist as PlaylistType, useMusic } from './hooks/MusicContext';
 
@@ -103,12 +104,45 @@ export default function PlaylistsScreen() {
     }
   };
 
+  const handleFeedback = () => {
+    const subject = encodeURIComponent('Music Player App Feedback');
+    const body = encodeURIComponent(
+      `Hi,\n\nI would like to provide feedback about the Music Player app.\n\n` +
+      `App Version: 1.0.0\n` +
+      `Device: ${Platform.OS}\n\n` +
+      `Feedback:\n\n` +
+      `Best regards,\n[Your Name]`
+    );
+    // TODO: Replace with your actual email address
+    const mailtoUrl = `mailto:feedback@musicplayer.app?subject=${subject}&body=${body}`;
+    
+    Linking.canOpenURL(mailtoUrl).then(supported => {
+      if (supported) {
+        Linking.openURL(mailtoUrl);
+      } else {
+        Alert.alert(
+          'Email Not Available',
+          'Please send feedback to: feedback@musicplayer.app',
+          [{ text: 'OK' }]
+        );
+      }
+    });
+  };
+
   return (
     <ScrollView 
       style={styles.container}
       contentContainerStyle={styles.listContent}
       showsVerticalScrollIndicator={false}
     >
+      {/* Header with title and feedback button */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Playlists</Text>
+        <TouchableOpacity style={styles.feedbackButton} onPress={handleFeedback}>
+          <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
+
       {/* Create new playlist */}
       <View style={styles.inputRow}>
         <TextInput
@@ -124,7 +158,6 @@ export default function PlaylistsScreen() {
       </View>
 
       {/* Horizontal playlist selector */}
-      <Text style={styles.title}>Your Playlists</Text>
       <FlatList
         data={playlists}
         extraData={playlists}
@@ -336,5 +369,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     borderRadius: 8,
     padding: 10,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  feedbackButton: {
+    padding: 8,
   },
 }); 
