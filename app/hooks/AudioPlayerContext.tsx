@@ -546,7 +546,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         activateScheduledStop,
         songList,
         setSongList,
-      //  testBackgroundTimer,
+        testBackgroundTimer,
       }}
     >
       {children}

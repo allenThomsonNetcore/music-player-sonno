@@ -108,13 +108,12 @@ export default function PlaylistsScreen() {
     const subject = encodeURIComponent('Music Player App Feedback');
     const body = encodeURIComponent(
       `Hi,\n\nI would like to provide feedback about the Music Player app.\n\n` +
-      `App Version: 1.0.0\n` +
-      `Device: ${Platform.OS}\n\n` +
+      `Device: ${Platform.OS} ${Platform.Version}\n` +
+      `App Version: 1.0.0\n\n` +
       `Feedback:\n\n` +
       `Best regards,\n[Your Name]`
     );
-    // TODO: Replace with your actual email address
-    const mailtoUrl = `mailto:feedback@musicplayer.app?subject=${subject}&body=${body}`;
+    const mailtoUrl = `mailto:allono.at@gmail.com?subject=${subject}&body=${body}`;
     
     Linking.canOpenURL(mailtoUrl).then(supported => {
       if (supported) {
@@ -122,7 +121,7 @@ export default function PlaylistsScreen() {
       } else {
         Alert.alert(
           'Email Not Available',
-          'Please send feedback to: feedback@musicplayer.app',
+          'Please send feedback to: allono.at@gmail.com',
           [{ text: 'OK' }]
         );
       }
@@ -140,6 +139,7 @@ export default function PlaylistsScreen() {
         <Text style={styles.title}>Playlists</Text>
         <TouchableOpacity style={styles.feedbackButton} onPress={handleFeedback}>
           <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
+          <Text style={styles.feedbackLabel}>Feedback</Text>
         </TouchableOpacity>
       </View>
 
@@ -158,6 +158,7 @@ export default function PlaylistsScreen() {
       </View>
 
       {/* Horizontal playlist selector */}
+      <Text style={styles.title}>Your Playlists</Text>
       <FlatList
         data={playlists}
         extraData={playlists}
@@ -252,7 +253,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 20,
   },
   inputRow: {
     flexDirection: 'row',
@@ -378,5 +378,11 @@ const styles = StyleSheet.create({
   },
   feedbackButton: {
     padding: 8,
+    alignItems: 'center',
+  },
+  feedbackLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 }); 
