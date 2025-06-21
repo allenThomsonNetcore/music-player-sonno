@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import TrackPlayer, {
   Event,
   State as TrackPlayerState,
@@ -171,7 +172,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   // Fade out and stop for TrackPlayer
-  const fadeOutAndStop = async (fadeDuration = 2000) => {
+  const fadeOutAndStop = async (fadeDuration = 3000) => {
     try {
       const initialVolume = await TrackPlayer.getVolume();
       if (initialVolume === 0) return; // Already faded or fading
@@ -195,7 +196,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   // Timer logic (updated)
-  const fadeDuration = 1000; // 1 second
+  const fadeDuration = 3000; // 1 second
 
   const startCountdown = (minutes: number) => {
     if (timerIdRef.current) clearTimeout(timerIdRef.current);
@@ -217,7 +218,6 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     // Set up the timeout to actually stop the music
     timerIdRef.current = setTimeout(() => {
-      // The UI interval will clear itself when the countdown reaches zero.
       fadeOutAndStop(fadeDuration);
     }, Math.max(0, millis - fadeDuration));
   };
@@ -252,13 +252,40 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     pendingTimer.current = null; // Clear any pending timer
   };
 
+  // Handle app state changes to ensure timers work in background
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // App came to foreground, check if any timers should have expired
+        if (timeRemaining !== null && timeRemaining <= 0) {
+          // Timer expired while app was in background
+          fadeOutAndStop(fadeDuration);
+          clearTimer();
+        }
+        
+        if (scheduledStopTime) {
+          const now = new Date();
+          const timeUntilStop = scheduledStopTime.getTime() - now.getTime();
+          if (timeUntilStop <= 0) {
+            // Scheduled stop time passed while app was in background
+            fadeOutAndStop(fadeDuration);
+            setScheduledStopTime(null);
+          }
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [timeRemaining, scheduledStopTime]);
+
   // Scheduled stop logic (updated)
   useEffect(() => {
     if (!scheduledStopTime) return;
     const now = new Date();
     const timeUntilStop = scheduledStopTime.getTime() - now.getTime();
     if (timeUntilStop > 0) {
-      // Start fade-out fadeDuration ms before scheduled stop
+      // Start fade-out before scheduled stop time so music stops exactly at scheduled time
       const fadeTimeout = setTimeout(() => {
         fadeOutAndStop(fadeDuration);
         setScheduledStopTime(null);
