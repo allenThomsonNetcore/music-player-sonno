@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, PermissionsAndroid, Platform } from 'react-native';
 import BackgroundTimer from 'react-native-background-timer';
 import TrackPlayer, {
   Event,
@@ -54,6 +54,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const backgroundTimerStarted = useRef(false);
   const timerEndTime = useRef<number | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const notificationPermissionRequested = useRef(false);
 
   const { recentlyPlayed, setRecentlyPlayed } = useMusic();
 
@@ -71,6 +72,41 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   // Update isPlaying based on TrackPlayer state
   const isPlaying = (typeof playbackState === 'object' ? playbackState.state : playbackState) === TrackPlayerState.Playing;
   const progress = duration > 0 ? position / duration : 0;
+
+  // Request notification permission when needed
+  const requestNotificationPermission = async () => {
+    if (notificationPermissionRequested.current) return;
+    
+    if (Platform.OS === 'android' && Platform.Version >= 33) {
+      try {
+        // Check if permission is already granted
+        const hasPermission = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+        );
+        
+        if (hasPermission) {
+          console.log('Notification permission already granted');
+          notificationPermissionRequested.current = true;
+          return;
+        }
+        
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+        );
+        
+        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('Notification permission granted');
+        } else {
+          console.warn('Notification permission not granted!');
+        }
+        
+        notificationPermissionRequested.current = true;
+      } catch (e) {
+        console.warn('Notification permission request error:', e);
+        notificationPermissionRequested.current = true;
+      }
+    }
+  };
 
   // Listen for track change events to update currentSong
   useTrackPlayerEvents([Event.PlaybackTrackChanged], async (event) => {
@@ -129,6 +165,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   // Play a song (replace queue with songList, skip to selected song)
   const playMusic = async (song: Song) => {
+    // Request notification permission when user first plays music
+    await requestNotificationPermission();
+    
     const playbackState = await TrackPlayer.getState();
     if (
       (playbackState === TrackPlayerState.Paused || playbackState === TrackPlayerState.Ready) &&

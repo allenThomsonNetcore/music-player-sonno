@@ -120,7 +120,7 @@ export default function PlaylistsScreen() {
         Linking.openURL(mailtoUrl);
       } else {
         Alert.alert(
-          'Email Not Available',
+          'Email To',
           'Please send feedback to: allono.at@gmail.com',
           [{ text: 'OK' }]
         );

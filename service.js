@@ -1,11 +1,31 @@
 import TrackPlayer from 'react-native-track-player';
 
 module.exports = async function () {
-  TrackPlayer.addEventListener('remote-play', () => TrackPlayer.play());
-  TrackPlayer.addEventListener('remote-pause', () => TrackPlayer.pause());
-  TrackPlayer.addEventListener('remote-stop', () => TrackPlayer.stop());
-  TrackPlayer.addEventListener('remote-next', () => TrackPlayer.skipToNext());
-  TrackPlayer.addEventListener('remote-previous', () => TrackPlayer.skipToPrevious());
+  // Simple notification control handlers - no navigation
+  TrackPlayer.addEventListener('remote-play', () => {
+    console.log('📱 Play button tapped');
+    TrackPlayer.play();
+  });
+  
+  TrackPlayer.addEventListener('remote-pause', () => {
+    console.log('📱 Pause button tapped');
+    TrackPlayer.pause();
+  });
+  
+  TrackPlayer.addEventListener('remote-stop', () => {
+    console.log('📱 Stop button tapped');
+    TrackPlayer.stop();
+  });
+  
+  TrackPlayer.addEventListener('remote-next', () => {
+    console.log('📱 Next button tapped');
+    TrackPlayer.skipToNext();
+  });
+  
+  TrackPlayer.addEventListener('remote-previous', () => {
+    console.log('📱 Previous button tapped');
+    TrackPlayer.skipToPrevious();
+  });
   
   // Handle seek events from notification controls
   TrackPlayer.addEventListener('remote-seek', async (event) => {
@@ -39,5 +59,4 @@ module.exports = async function () {
       console.error('❌ Error jumping backward:', error);
     }
   });
-  // You can add more event handlers here if needed
 }; 
