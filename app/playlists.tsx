@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAudioPlayer } from './hooks/AudioPlayerContext';
-import { Playlist as PlaylistType, useMusic } from './hooks/MusicContext';
+import { useAudioPlayer } from '../shared/hooks/AudioPlayerContext';
+import { Playlist as PlaylistType, useMusic } from '../shared/hooks/MusicContext';
 
 export default function PlaylistsScreen() {
   const {

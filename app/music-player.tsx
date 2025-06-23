@@ -1,9 +1,9 @@
 import { useFocusEffect } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAudioPlayer } from './hooks/AudioPlayerContext';
-import { useMusic } from './hooks/MusicContext';
-import { Song } from './types/music';
+import { useAudioPlayer } from '../shared/hooks/AudioPlayerContext';
+import { useMusic } from '../shared/hooks/MusicContext';
+import { Song } from '../shared/types/music';
 
 export default function AllSongsScreen() {
   const {

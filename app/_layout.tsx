@@ -6,10 +6,10 @@ import { useEffect, useState } from 'react';
 import { AppState, Linking, PermissionsAndroid, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { MusicPlayerBar } from './components/music-player/MusicPlayerBar';
-import { AudioPlayerProvider } from './hooks/AudioPlayerContext';
-import { MusicProvider } from './hooks/MusicContext';
-import { setupTrackPlayer } from './trackPlayerSetup';
+import { MusicPlayerBar } from '../shared/components/music-player/MusicPlayerBar';
+import { AudioPlayerProvider } from '../shared/hooks/AudioPlayerContext';
+import { MusicProvider } from '../shared/hooks/MusicContext';
+import { setupTrackPlayer } from '../shared/trackPlayerSetup';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();

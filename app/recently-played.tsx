@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAudioPlayer } from './hooks/AudioPlayerContext';
-import { useMusic } from './hooks/MusicContext';
-import { Song } from './types/music';
+import { useAudioPlayer } from '../shared/hooks/AudioPlayerContext';
+import { useMusic } from '../shared/hooks/MusicContext';
+import { Song } from '../shared/types/music';
 
 export default function RecentlyPlayedScreen() {
   const { getRecentlyPlayedSongs } = useMusic();
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   playingText: {
-    color: '#4CAF50',
+   
     fontWeight: 'bold',
   },
   emptyText: {
