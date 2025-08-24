@@ -17,7 +17,14 @@
         "backgroundColor": "#181A20"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.allenthomsonnetcore.music"
+      "package": "com.allenthomsonnetcore.music",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE"
+      ]
     },
     "web": {
       "bundler": "metro",
