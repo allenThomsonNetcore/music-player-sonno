@@ -12,6 +12,13 @@ import TrackPlayer, {
 import { Song } from '../types/music';
 import { useMusic } from './MusicContext';
 
+// Timer mode enum
+export enum TimerMode {
+  COUNTDOWN = 'countdown',
+  END_OF_SONG = 'end_of_song',
+  SCHEDULED = 'scheduled'
+}
+
 interface AudioPlayerContextType {
   currentSong: Song | null;
   isPlaying: boolean;
@@ -19,6 +26,7 @@ interface AudioPlayerContextType {
   duration: number;
   position: number;
   timeRemaining: number | null;
+  timerMode: TimerMode | null;
   playMusic: (song: Song) => Promise<void>;
   pauseMusic: () => Promise<void>;
   resumeMusic: () => Promise<void>;
@@ -28,6 +36,7 @@ interface AudioPlayerContextType {
   playNext: () => Promise<void>;
   playPrevious: () => Promise<void>;
   startTimer: (minutes: number) => Promise<void>;
+  startEndOfSongTimer: () => Promise<void>;
   clearTimer: (clearScheduled?: boolean) => void;
   scheduledStopTime: Date | null;
   setScheduledStopTime: (date: Date | null) => void;
@@ -42,6 +51,7 @@ const AudioPlayerContext = createContext<AudioPlayerContextType | undefined>(und
 export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [timerMode, setTimerMode] = useState<TimerMode | null>(null);
   const [scheduledStopTime, setScheduledStopTime] = useState<Date | null>(null);
   const [songList, setSongList] = useState<Song[]>([]);
   const [isScheduledStopActive, setIsScheduledStopActive] = useState(false);
@@ -63,6 +73,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const { position, duration } = useProgress(250);
 
   const pendingTimer = useRef<number | null>(null);
+  const lastPositionRef = useRef<number>(0);
+  const songEndDetectedRef = useRef<boolean>(false);
+  const endOfSongCheckInterval = useRef<any>(null);
 
   const isFadingOut = useRef(false);
 
@@ -123,6 +136,37 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   });
 
+  // Listen for multiple events to handle end-of-song timer
+  useTrackPlayerEvents([Event.PlaybackQueueEnded, Event.PlaybackState], async (event) => {
+    console.log('[END_OF_SONG] TrackPlayer event fired:', event.type);
+
+    if (event.type === Event.PlaybackQueueEnded) {
+      console.log('[END_OF_SONG] PlaybackQueueEnded event fired');
+
+      // Check if we have an active end-of-song timer and haven't already detected end
+      if (timerMode === TimerMode.END_OF_SONG && !songEndDetectedRef.current) {
+        console.log('[END_OF_SONG] End-of-song timer active, stopping music via queue end event');
+        songEndDetectedRef.current = true;
+        await TrackPlayer.stop();
+        clearTimer();
+        stopBackgroundTimer();
+      }
+    }
+
+    if (event.type === Event.PlaybackState) {
+      console.log('[END_OF_SONG] PlaybackState changed to:', event.state);
+
+      // Only handle Ended state, not loading/ready/playing transitions
+      if (event.state === TrackPlayerState.Ended && timerMode === TimerMode.END_OF_SONG && !songEndDetectedRef.current) {
+        console.log('[END_OF_SONG] Playback ended with end-of-song timer active, stopping music via state event');
+        songEndDetectedRef.current = true;
+        await TrackPlayer.stop();
+        clearTimer();
+        stopBackgroundTimer();
+      }
+    }
+  });
+
   // Handle app state changes for background timer
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -179,6 +223,14 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     console.log('TrackPlayer.playMusic called for', song.title);
     setCurrentSong(song); // Optimistically update UI
+    songEndDetectedRef.current = false; // Reset end detection flag for new song
+
+    // Clear any existing end-of-song check when starting new song
+    if (endOfSongCheckInterval.current) {
+      clearInterval(endOfSongCheckInterval.current);
+      endOfSongCheckInterval.current = null;
+    }
+
     isSettingTrack.current = true;
     try {
       // Replace queue with current songList
@@ -419,6 +471,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     console.log(`[TIMER] startTimer called with ${minutes} minutes`);
     const seconds = minutes * 60;
     setTimeRemaining(seconds);
+    setTimerMode(TimerMode.COUNTDOWN);
 
     if (isPlaying) {
       console.log('[TIMER] Music is playing, starting background timer immediately');
@@ -433,6 +486,130 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   };
 
+  const startEndOfSongTimer = async () => {
+    console.log('[END_OF_SONG] Starting end-of-song timer');
+    console.log('[END_OF_SONG] Current state - isPlaying:', isPlaying, 'currentSong:', currentSong?.title, 'duration:', duration, 'position:', position);
+
+    if (!isPlaying || !currentSong) {
+      console.log('[END_OF_SONG] No music playing, cannot start end-of-song timer');
+      return;
+    }
+
+    // Clear any existing timers
+    clearTimer();
+
+    // Reset detection flag
+    songEndDetectedRef.current = false;
+
+    // Set timer mode and display status
+    setTimerMode(TimerMode.END_OF_SONG);
+    setTimeRemaining(-1); // Special value to indicate end-of-song timer
+
+    // Clear scheduled timers
+    setScheduledStopTime(null);
+    setIsScheduledStopActive(false);
+
+    // Modify the TrackPlayer queue to only contain the current song
+    // This prevents auto-advance to the next song
+    await setupSingleSongQueue(currentSong);
+
+    // Start periodic check for song end (more reliable than events)
+    startEndOfSongCheck();
+
+    console.log('[END_OF_SONG] End-of-song timer activated - will stop after current song');
+    console.log('[END_OF_SONG] Song duration:', duration, 'current position:', position, 'remaining:', (duration - position) / 1000, 'seconds');
+  };
+
+  const setupSingleSongQueue = async (song: Song) => {
+    console.log('[END_OF_SONG] Setting up single-song queue for:', song.title);
+    try {
+      // Get current position to preserve playback position
+      const currentPosition = await TrackPlayer.getPosition();
+
+      // Reset queue with only the current song
+      await TrackPlayer.reset();
+      await TrackPlayer.add({
+        id: song.id,
+        url: song.uri,
+        title: song.title,
+        artist: '',
+        duration: song.duration ? song.duration / 1000 : undefined,
+      });
+
+      // Resume from the same position
+      await TrackPlayer.seekTo(currentPosition);
+      await TrackPlayer.play();
+
+      console.log('[END_OF_SONG] Single-song queue setup complete, resumed at position:', currentPosition);
+    } catch (error) {
+      console.error('[END_OF_SONG] Error setting up single-song queue:', error);
+    }
+  };
+
+  const startEndOfSongCheck = () => {
+    // Clear any existing check
+    if (endOfSongCheckInterval.current) {
+      clearInterval(endOfSongCheckInterval.current);
+    }
+
+    console.log('[END_OF_SONG] Starting periodic end-of-song check');
+
+    endOfSongCheckInterval.current = setInterval(async () => {
+      if (timerMode !== TimerMode.END_OF_SONG || songEndDetectedRef.current) {
+        console.log('[END_OF_SONG] Stopping periodic check - timer mode changed or already detected');
+        clearInterval(endOfSongCheckInterval.current);
+        endOfSongCheckInterval.current = null;
+        return;
+      }
+
+      try {
+        const currentState = await TrackPlayer.getState();
+        const currentPosition = await TrackPlayer.getPosition();
+        const currentDuration = await TrackPlayer.getDuration();
+
+        console.log(`[END_OF_SONG] Check - State: ${currentState}, Position: ${currentPosition.toFixed(1)}s, Duration: ${currentDuration.toFixed(1)}s`);
+
+        // Check if playback has stopped/ended
+        if (currentState === TrackPlayerState.Stopped || currentState === TrackPlayerState.Ended) {
+          console.log('[END_OF_SONG] Playback stopped/ended detected via periodic check');
+          songEndDetectedRef.current = true;
+          clearInterval(endOfSongCheckInterval.current);
+          endOfSongCheckInterval.current = null;
+
+          // Stop music and clear timer - song has ended naturally
+          console.log('[END_OF_SONG] Song ended naturally, stopping playback');
+          await TrackPlayer.stop();
+          clearTimer();
+          stopBackgroundTimer();
+        }
+        // Check if we're very close to the end (within 1 second and above 95% progress)
+        else if (currentDuration > 0 && currentPosition > 0) {
+          const remaining = currentDuration - currentPosition;
+          const progress = currentPosition / currentDuration;
+
+          if (remaining <= 1 && progress >= 0.95) {
+            console.log('[END_OF_SONG] Very close to end detected via periodic check');
+            songEndDetectedRef.current = true;
+            clearInterval(endOfSongCheckInterval.current);
+            endOfSongCheckInterval.current = null;
+
+            // Wait for the remaining time plus a small buffer
+            setTimeout(async () => {
+              if (timerMode === TimerMode.END_OF_SONG) {
+                console.log('[END_OF_SONG] Executing end-of-song timer after waiting for song to finish');
+                await TrackPlayer.stop();
+                clearTimer();
+                stopBackgroundTimer();
+              }
+            }, (remaining * 1000) + 500); // Wait for remaining time + 0.5s buffer
+          }
+        }
+      } catch (error) {
+        console.error('[END_OF_SONG] Error in periodic check:', error);
+      }
+    }, 1000); // Check every second
+  };
+
   useEffect(() => {
     console.log(`[TIMER] useEffect triggered - isPlaying: ${isPlaying}, pendingTimer: ${pendingTimer.current}`);
     if (isPlaying && pendingTimer.current) {
@@ -441,6 +618,43 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       pendingTimer.current = null;
     }
   }, [isPlaying]);
+
+  // Monitor progress for end-of-song detection (fallback method) - DISABLED for now due to calculation issues
+  useEffect(() => {
+    if (timerMode === TimerMode.END_OF_SONG && duration > 0 && position >= 0) {
+      const progressPercent = position / duration;
+      const remainingMs = duration - position;
+      const remainingSeconds = remainingMs / 1000;
+
+      // Debug logging only - don't trigger based on progress for now
+      if (progressPercent > 0.1) { // Only log after 10% to reduce spam
+        console.log(`[END_OF_SONG] Progress: ${(progressPercent * 100).toFixed(1)}%, Position: ${(position/1000).toFixed(1)}s, Duration: ${(duration/1000).toFixed(1)}s, Remaining: ${remainingSeconds.toFixed(1)}s`);
+      }
+
+      // DISABLED: Progress-based detection due to calculation issues
+      // Only rely on TrackPlayer events for now
+      /*
+      if (remainingSeconds <= 1 && progressPercent >= 0.95 && !songEndDetectedRef.current && isPlaying) {
+        console.log('[END_OF_SONG] Song ending detected via progress monitoring - very close to end');
+        songEndDetectedRef.current = true;
+
+        setTimeout(async () => {
+          if (timerMode === TimerMode.END_OF_SONG) {
+            console.log('[END_OF_SONG] Executing end-of-song timer via progress detection');
+            await forceStopMusic();
+            clearTimer();
+            stopBackgroundTimer();
+          }
+        }, Math.max(200, remainingMs - 200));
+      }
+      */
+    }
+
+    // Reset detection flag when song changes or timer is cleared
+    if (timerMode !== TimerMode.END_OF_SONG) {
+      songEndDetectedRef.current = false;
+    }
+  }, [position, duration, timerMode, isPlaying]);
 
   const stopBackgroundTimer = () => {
     if (backgroundTimerStarted.current) {
@@ -452,32 +666,46 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const clearTimer = (clearScheduled = true) => {
     console.log('[TIMER] Clearing all timers');
-    
+
     if (timerIdRef.current) {
       console.log('[TIMER] Clearing main background timer');
       BackgroundTimer.clearTimeout(timerIdRef.current);
       timerIdRef.current = null;
     }
-    
+
     if (countdownRef.current) {
       console.log('[TIMER] Clearing countdown interval');
       BackgroundTimer.clearInterval(countdownRef.current);
       countdownRef.current = null;
     }
-    
+
+    // Clear end-of-song check interval
+    if (endOfSongCheckInterval.current) {
+      console.log('[TIMER] Clearing end-of-song check interval');
+      clearInterval(endOfSongCheckInterval.current);
+      endOfSongCheckInterval.current = null;
+    }
+
     // Only stop background timer if we're not fading out
     if (backgroundTimerStarted.current && !isFadingOut.current) {
       stopBackgroundTimer();
     }
-    
+
     setTimeRemaining(null);
+    setTimerMode(null);
     if (clearScheduled) {
       setScheduledStopTime(null);
       setIsScheduledStopActive(false);
     }
     pendingTimer.current = null;
     timerEndTime.current = null;
+    songEndDetectedRef.current = false;
+
+    // Don't automatically restore queue when user manually clears timer
+    // Queue will be restored when user plays a new song normally
   };
+
+
 
   // Handle scheduled stop time
   useEffect(() => {
@@ -540,6 +768,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     if (scheduledStopTime) {
       console.log('[SCHEDULED] Activating scheduled stop');
       setIsScheduledStopActive(true);
+      setTimerMode(TimerMode.SCHEDULED);
     }
   };
 
@@ -570,6 +799,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         duration: duration * 1000, // convert to ms
         position: position * 1000, // convert to ms
         timeRemaining,
+        timerMode,
         playMusic,
         pauseMusic,
         resumeMusic,
@@ -579,6 +809,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
         playNext,
         playPrevious,
         startTimer,
+        startEndOfSongTimer,
         clearTimer,
         scheduledStopTime,
         setScheduledStopTime,

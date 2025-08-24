@@ -1,7 +1,7 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAudioPlayer } from '../../hooks/AudioPlayerContext';
+import { TimerMode, useAudioPlayer } from '../../hooks/AudioPlayerContext';
 import { formatTime } from '../../utils/audioUtils';
 import { PlayerControls } from './PlayerControls';
 
@@ -11,6 +11,7 @@ export const MusicPlayerBar: React.FC = () => {
     isPlaying,
     progress,
     timeRemaining,
+    timerMode,
     duration,
     position,
     playMusic,
@@ -21,6 +22,7 @@ export const MusicPlayerBar: React.FC = () => {
     playNext,
     playPrevious,
     startTimer,
+    startEndOfSongTimer,
     scheduledStopTime,
     setScheduledStopTime,
     clearTimer: clearAudioTimer,
@@ -63,6 +65,12 @@ export const MusicPlayerBar: React.FC = () => {
       console.log('Activating scheduled stop');
       activateScheduledStop();
     }
+  };
+
+  const handleEndOfSongTimer = async () => {
+    if (!currentSong || !isPlaying) return;
+    console.log('Starting end-of-song timer');
+    await startEndOfSongTimer();
   };
 
   const handleScheduleStop = (event: any, selectedDate?: Date) => {
@@ -126,7 +134,7 @@ export const MusicPlayerBar: React.FC = () => {
         
         {/* Timer Section */}
         <View style={styles.timerSection}>
-          {/* Timer Input Row */}
+          {/* Countdown Timer Row */}
           <View style={styles.timerInputRow}>
             <TextInput
               style={styles.timerInput}
@@ -136,11 +144,11 @@ export const MusicPlayerBar: React.FC = () => {
               value={timerInput}
               onChangeText={setTimerInput}
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[
-                styles.timerButton, 
+                styles.timerButton,
                 (!timerInput && !scheduledStopTime) && styles.disabledButton
-              ]} 
+              ]}
               onPress={handleTimerStart}
               disabled={!timerInput && !scheduledStopTime}
             >
@@ -151,22 +159,28 @@ export const MusicPlayerBar: React.FC = () => {
                 {timerInput ? 'Start Timer' : (scheduledStopTime && !timeRemaining ? 'Start Schedule' : 'Start')}
               </Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Timer Options Row */}
+          <View style={styles.timerOptionsRow}>
             <TouchableOpacity style={styles.scheduleButton} onPress={handleScheduleButtonPress}>
               <Text style={styles.buttonText}>Schedule</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.endOfSongButton, !currentSong && styles.disabledButton]}
+              onPress={handleEndOfSongTimer}
+              disabled={!currentSong}
+            >
+              <Text style={[styles.buttonText, !currentSong && styles.disabledButtonText]}>End of Song</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.clearButton} onPress={timeRemaining ? clearCountdownTimer : clearTimer}>
               <Text style={styles.clearButtonText}>Clear</Text>
             </TouchableOpacity>
-            {/* Test button - uncomment for debugging
-            <TouchableOpacity style={styles.testButton} onPress={testBackgroundTimer}>
-              <Text style={styles.testButtonText}>Test</Text>
-            </TouchableOpacity>
-            */}
           </View>
         </View>
         
         {/* Status Messages */}
-        {(scheduledStopTime || timeRemaining !== null) && (
+        {(scheduledStopTime || timeRemaining !== null || timerMode === TimerMode.END_OF_SONG) && (
           <View style={styles.statusContainer}>
             {scheduledStopTime && (
               <View style={styles.scheduledStatusRow}>
@@ -178,6 +192,11 @@ export const MusicPlayerBar: React.FC = () => {
             {timeRemaining !== null && timeRemaining > 0 && (
               <Text style={styles.statusText}>
                 ⏱ Countdown: {formatTime(timeRemaining)}
+              </Text>
+            )}
+            {timerMode === TimerMode.END_OF_SONG && timeRemaining === -1 && (
+              <Text style={styles.statusText}>
+                🎵 Will stop after current song ends
               </Text>
             )}
           </View>
@@ -214,11 +233,17 @@ const styles = StyleSheet.create({
   },
   timerSection: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   timerInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 6,
+  },
+  timerOptionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   timerInput: {
     backgroundColor: '#23242a',
@@ -243,19 +268,38 @@ const styles = StyleSheet.create({
   scheduleButton: {
     backgroundColor: '#23242a',
     borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginRight: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginHorizontal: 3,
     borderWidth: 1,
     borderColor: '#444',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endOfSongButton: {
+    backgroundColor: '#23242a',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginHorizontal: 3,
+    borderWidth: 1,
+    borderColor: '#444',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   clearButton: {
     backgroundColor: '#23242a',
     borderRadius: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginHorizontal: 3,
     borderWidth: 1,
     borderColor: '#444',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   testButton: {
     backgroundColor: '#23242a',
@@ -269,12 +313,14 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#007AFF',
     fontWeight: '600',
-    fontSize: 12,
+    fontSize: 11,
+    textAlign: 'center',
   },
   clearButtonText: {
     color: '#007AFF',
     fontWeight: '600',
-    fontSize: 12,
+    fontSize: 11,
+    textAlign: 'center',
   },
   testButtonText: {
     color: '#007AFF',
