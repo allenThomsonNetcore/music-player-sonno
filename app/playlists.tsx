@@ -2,8 +2,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SwipeableTabWrapper } from '../shared/components/SwipeableTabWrapper';
 import { useAudioPlayer } from '../shared/hooks/AudioPlayerContext';
 import { Playlist as PlaylistType, useMusic } from '../shared/hooks/MusicContext';
+import { useMusicPlayerHeight } from '../shared/hooks/MusicPlayerHeightContext';
 
 export default function PlaylistsScreen() {
   const {
@@ -21,6 +23,7 @@ export default function PlaylistsScreen() {
   const [addSongsSearchQuery, setAddSongsSearchQuery] = useState('');
 
   const { currentSong, playMusic, setSongList, stopMusicWithoutClearingTimer } = useAudioPlayer();
+  const { musicPlayerHeight } = useMusicPlayerHeight();
 
   // Reset selectedPlaylist when tab is focused
   useFocusEffect(
@@ -129,9 +132,10 @@ export default function PlaylistsScreen() {
   };
 
   return (
-    <ScrollView 
+    <SwipeableTabWrapper currentTab="playlists">
+      <ScrollView
       style={styles.container}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[styles.listContent, { paddingBottom: musicPlayerHeight + 20 }]}
       showsVerticalScrollIndicator={false}
     >
       {/* Header with title and feedback button */}
@@ -238,7 +242,8 @@ export default function PlaylistsScreen() {
            )}
         </>
       )}
-    </ScrollView>
+      </ScrollView>
+    </SwipeableTabWrapper>
   );
 }
 
@@ -359,7 +364,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   listContent: {
-    paddingBottom: 150, // More padding for scroll view
+    // paddingBottom is now dynamic based on music player height
   },
   searchContainer: {
     marginBottom: 10,

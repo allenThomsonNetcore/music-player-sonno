@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SwipeableTabWrapper } from '../shared/components/SwipeableTabWrapper';
 import { useAudioPlayer } from '../shared/hooks/AudioPlayerContext';
 import { useMusic } from '../shared/hooks/MusicContext';
 import { Song } from '../shared/types/music';
@@ -21,7 +22,8 @@ export default function RecentlyPlayedScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SwipeableTabWrapper currentTab="recently-played">
+      <View style={styles.container}>
       <Text style={styles.title}>Recently Played</Text>
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -50,10 +52,11 @@ export default function RecentlyPlayedScreen() {
             {searchQuery ? `No recently played songs matching "${searchQuery}"` : 'No recently played songs.'}
           </Text>
         }
-        style={{ flex: 1 }}
+        style={{ flex: 1, backgroundColor: '#181A20' }}
         contentContainerStyle={styles.listContent}
       />
-    </View>
+      </View>
+    </SwipeableTabWrapper>
   );
 }
 

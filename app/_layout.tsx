@@ -9,6 +9,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MusicPlayerBar } from '../shared/components/music-player/MusicPlayerBar';
 import { AudioPlayerProvider } from '../shared/hooks/AudioPlayerContext';
 import { MusicProvider } from '../shared/hooks/MusicContext';
+import { MusicPlayerHeightProvider } from '../shared/hooks/MusicPlayerHeightContext';
 import { setupTrackPlayer } from '../shared/trackPlayerSetup';
 
 // Keep the splash screen visible while we fetch resources
@@ -134,12 +135,13 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider style={{ backgroundColor: '#181A20' }}>
       <StatusBar style="light" backgroundColor="#181A20" translucent={false} />
-      <GestureHandlerRootView style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#181A20' }}>
         <MusicProvider>
           <AudioPlayerProvider>
-            <SafeAreaView style={{ flex: 1, backgroundColor: '#181A20' }} edges={['top', 'left', 'right']}>
+            <MusicPlayerHeightProvider>
+              <SafeAreaView style={{ flex: 1, backgroundColor: '#181A20' }} edges={['top', 'left', 'right']}>
               <Tabs
                 screenOptions={{
                   tabBarPosition: 'top',
@@ -160,6 +162,7 @@ export default function RootLayout() {
                   headerShown: false,
                   tabBarHideOnKeyboard: false,
                   tabBarShowLabel: true,
+                  lazy: false, // Disable lazy loading to prevent white flashes
                 }}
                 initialRouteName="music-player"
               >
@@ -199,6 +202,7 @@ export default function RootLayout() {
               </Tabs>
               <MusicPlayerBar />
             </SafeAreaView>
+            </MusicPlayerHeightProvider>
           </AudioPlayerProvider>
         </MusicProvider>
       </GestureHandlerRootView>

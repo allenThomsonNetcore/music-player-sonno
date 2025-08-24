@@ -2,6 +2,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { TimerMode, useAudioPlayer } from '../../hooks/AudioPlayerContext';
+import { useMusicPlayerHeight } from '../../hooks/MusicPlayerHeightContext';
 import { formatTime } from '../../utils/audioUtils';
 import { PlayerControls } from './PlayerControls';
 
@@ -33,6 +34,13 @@ export const MusicPlayerBar: React.FC = () => {
   const [timerInput, setTimerInput] = useState('');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [pickerDefaultTime, setPickerDefaultTime] = useState(new Date(Date.now() + 60 * 60 * 1000));
+
+  const {
+    musicPlayerHeight,
+    setMusicPlayerHeight,
+    isTimerSectionVisible,
+    setIsTimerSectionVisible
+  } = useMusicPlayerHeight();
 
   // Debug logging for timer state
   console.log('MusicPlayerBar - timeRemaining:', timeRemaining, 'scheduledStopTime:', scheduledStopTime);
@@ -71,6 +79,26 @@ export const MusicPlayerBar: React.FC = () => {
     if (!currentSong || !isPlaying) return;
     console.log('Starting end-of-song timer');
     await startEndOfSongTimer();
+  };
+
+  // Auto-show timer section when timer is active
+  useEffect(() => {
+    if (timeRemaining !== null || timerMode === TimerMode.END_OF_SONG || scheduledStopTime) {
+      setIsTimerSectionVisible(true);
+    }
+  }, [timeRemaining, timerMode, scheduledStopTime]);
+
+  // Update music player height when timer section visibility changes
+  useEffect(() => {
+    const baseHeight = 120; // Base height without timer section
+    const timerSectionHeight = 100; // Approximate height of timer section
+    const newHeight = isTimerSectionVisible ? baseHeight + timerSectionHeight : baseHeight;
+    setMusicPlayerHeight(newHeight);
+  }, [isTimerSectionVisible, setMusicPlayerHeight]);
+
+  const handleMusicPlayerLayout = (event: any) => {
+    const { height } = event.nativeEvent.layout;
+    setMusicPlayerHeight(height);
   };
 
   const handleScheduleStop = (event: any, selectedDate?: Date) => {
@@ -118,7 +146,7 @@ export const MusicPlayerBar: React.FC = () => {
 
   return (
     <>
-      <View style={styles.stickyBar}>
+      <View style={styles.stickyBar} onLayout={handleMusicPlayerLayout}>
         <PlayerControls
           isPlaying={isPlaying}
           onPlayPause={handlePlayPause}
@@ -131,9 +159,24 @@ export const MusicPlayerBar: React.FC = () => {
           position={position}
           onSeek={val => seekTo(val * duration)}
         />
-        
-        {/* Timer Section */}
-        <View style={styles.timerSection}>
+
+        {/* Timer Toggle Button */}
+        <TouchableOpacity
+          style={styles.timerToggleButton}
+          onPress={() => setIsTimerSectionVisible(!isTimerSectionVisible)}
+        >
+          <Text style={styles.timerToggleText}>
+            {isTimerSectionVisible ? ' Hide Timer' : ' Timer'}
+            {(timeRemaining !== null || timerMode === TimerMode.END_OF_SONG || scheduledStopTime) && ' (Active)'}
+          </Text>
+          {(timeRemaining !== null || timerMode === TimerMode.END_OF_SONG || scheduledStopTime) && (
+            <View style={styles.timerIndicator} />
+          )}
+        </TouchableOpacity>
+
+        {/* Timer Section - Collapsible */}
+        {isTimerSectionVisible && (
+          <View style={styles.timerSection}>
           {/* Countdown Timer Row */}
           <View style={styles.timerInputRow}>
             <TextInput
@@ -177,29 +220,30 @@ export const MusicPlayerBar: React.FC = () => {
               <Text style={styles.clearButtonText}>Clear</Text>
             </TouchableOpacity>
           </View>
-        </View>
-        
-        {/* Status Messages */}
-        {(scheduledStopTime || timeRemaining !== null || timerMode === TimerMode.END_OF_SONG) && (
-          <View style={styles.statusContainer}>
-            {scheduledStopTime && (
-              <View style={styles.scheduledStatusRow}>
+
+          {/* Status Messages */}
+          {(scheduledStopTime || timeRemaining !== null || timerMode === TimerMode.END_OF_SONG) && (
+            <View style={styles.statusContainer}>
+              {scheduledStopTime && (
+                <View style={styles.scheduledStatusRow}>
+                  <Text style={styles.statusText}>
+                    ⏱ Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
+                  </Text>
+                </View>
+              )}
+              {timeRemaining !== null && timeRemaining > 0 && (
                 <Text style={styles.statusText}>
-                  ⏱ Scheduled to stop at: {scheduledStopTime.toLocaleTimeString()}
+                  ⏱ Countdown: {formatTime(timeRemaining)}
                 </Text>
-              </View>
-            )}
-            {timeRemaining !== null && timeRemaining > 0 && (
-              <Text style={styles.statusText}>
-                ⏱ Countdown: {formatTime(timeRemaining)}
-              </Text>
-            )}
-            {timerMode === TimerMode.END_OF_SONG && timeRemaining === -1 && (
-              <Text style={styles.statusText}>
-                🎵 Will stop after current song ends
-              </Text>
-            )}
-          </View>
+              )}
+              {timerMode === TimerMode.END_OF_SONG && timeRemaining === -1 && (
+                <Text style={styles.statusText}>
+                  🎵 Will stop after current song ends
+                </Text>
+              )}
+            </View>
+          )}
+        </View>
         )}
       </View>
       
@@ -353,4 +397,29 @@ const styles = StyleSheet.create({
   disabledButtonText: {
     color: '#888',
   },
-}); 
+  timerToggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#23242a',
+    borderRadius: 6,
+    marginHorizontal: 12,
+    marginVertical: 4,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  timerToggleText: {
+    color: '#007AFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  timerIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF6B35',
+    marginLeft: 8,
+  },
+});
