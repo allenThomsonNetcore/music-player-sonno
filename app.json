@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Sleep music",
-    "slug": "Sleep music",
+    "name": "SONNO",
+    "slug": "sonno-sleep-music",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/music_icon.png",
+    "icon": "./assets/images/sonno_splash_icon.png",
     "scheme": "music",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,11 +13,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/music_icon.png",
+        "foregroundImage": "./assets/images/sonno_splash_icon.png",
         "backgroundColor": "#181A20"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.allenthomsonnetcore.music",
+      "package": "com.sonno.music",
       "versionCode": 1,
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -36,7 +36,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/music_icon.png",
+          "image": "./assets/images/sonno_splash_icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#181A20"
@@ -47,6 +47,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e9625cf8-cb35-4e8a-a1ed-5a16ae0f03fa"
+      }
     }
   }
 }

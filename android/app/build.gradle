@@ -89,7 +89,7 @@ android {
 
     namespace 'com.allenthomsonnetcore.music'
     defaultConfig {
-        applicationId 'com.allenthomsonnetcore.music'
+        applicationId 'com.sonno.music'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
