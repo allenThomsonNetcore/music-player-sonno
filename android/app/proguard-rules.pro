@@ -11,4 +11,15 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# react-native-track-player
+-keep class com.doublesymmetry.trackplayer.** { *; }
+-keep class androidx.media3.** { *; }
+
+# React Native
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.hermes.** { *; }
+
+# Expo
+-keep class expo.modules.** { *; }
+
 # Add any project specific keep options here:

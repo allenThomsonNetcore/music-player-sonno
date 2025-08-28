@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as MediaLibrary from 'expo-media-library';
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { PermissionsAndroid, Platform } from 'react-native';
 import { Song } from '../types/music';
 
 export interface Playlist {
@@ -20,7 +21,8 @@ interface MusicContextType {
   removeSongFromPlaylist: (playlistId: string, songId: string) => void;
   getSongsForPlaylist: (playlist: Playlist | null) => Song[];
   getRecentlyPlayedSongs: () => Song[];
-  refreshAllSongs: () => void;
+  refreshAllSongs: (requestPermissionIfNeeded?: boolean) => void;
+  requestStoragePermissions: (forceRequest?: boolean) => Promise<boolean>;
   recentlyPlayed: Song[];
   setRecentlyPlayed: (songs: Song[] | ((prev: Song[]) => Song[])) => void;
 }
@@ -35,6 +37,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [currentPlaylist, setCurrentPlaylist] = useState<Playlist | null>(null);
   const [recentlyPlayed, setRecentlyPlayed] = useState<Song[]>([]);
+  const [permissionGranted, setPermissionGranted] = useState<boolean | null>(null); // Cache permission status
 
   // Load playlists and recently played from storage on mount
   useEffect(() => {
@@ -94,24 +97,142 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  // Fetch all audio files on mount
-  const refreshAllSongs = async () => {
-    const { status } = await MediaLibrary.requestPermissionsAsync();
-    if (status !== 'granted') return;
-    const media = await MediaLibrary.getAssetsAsync({ mediaType: 'audio', first: 1000 });
-    const songs: Song[] = media.assets.map(asset => ({
-      id: asset.id,
-      title: asset.filename,
-      uri: asset.uri,
-      duration: asset.duration
-    }));
-    // Sort alphabetically by title
-    songs.sort((a, b) => a.title.localeCompare(b.title));
-    setAllSongs(songs);
+  // Request storage permissions for different Android versions (with caching)
+  const requestStoragePermissions = async (forceRequest: boolean = false): Promise<boolean> => {
+    // Return cached result if available and not forcing a new request
+    if (!forceRequest && permissionGranted !== null) {
+      return permissionGranted;
+    }
+
+    if (Platform.OS !== 'android') {
+      // For iOS, use MediaLibrary permissions
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const granted = status === 'granted';
+      setPermissionGranted(granted);
+      return granted;
+    }
+
+    try {
+      // For Android 13+ (API 33+), request READ_MEDIA_AUDIO
+      if (Platform.Version >= 33) {
+        const hasAudioPermission = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO
+        );
+
+        if (hasAudioPermission) {
+          console.log('READ_MEDIA_AUDIO permission already granted');
+          setPermissionGranted(true);
+          return true;
+        }
+
+        // Only show permission dialog if explicitly requested
+        if (forceRequest) {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+            {
+              title: 'Music Access Permission',
+              message: 'SONNO needs access to your music files to play them.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+
+          const isGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
+          setPermissionGranted(isGranted);
+
+          if (isGranted) {
+            console.log('READ_MEDIA_AUDIO permission granted');
+          } else {
+            console.warn('READ_MEDIA_AUDIO permission denied');
+          }
+          return isGranted;
+        } else {
+          setPermissionGranted(false);
+          return false;
+        }
+      } else {
+        // For Android 12 and below, request READ_EXTERNAL_STORAGE
+        const hasStoragePermission = await PermissionsAndroid.check(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
+        );
+
+        if (hasStoragePermission) {
+          console.log('READ_EXTERNAL_STORAGE permission already granted');
+          setPermissionGranted(true);
+          return true;
+        }
+
+        // Only show permission dialog if explicitly requested
+        if (forceRequest) {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+            {
+              title: 'Storage Access Permission',
+              message: 'SONNO needs access to your storage to find music files.',
+              buttonNeutral: 'Ask Me Later',
+              buttonNegative: 'Cancel',
+              buttonPositive: 'OK',
+            }
+          );
+
+          const isGranted = granted === PermissionsAndroid.RESULTS.GRANTED;
+          setPermissionGranted(isGranted);
+
+          if (isGranted) {
+            console.log('READ_EXTERNAL_STORAGE permission granted');
+          } else {
+            console.warn('READ_EXTERNAL_STORAGE permission denied');
+          }
+          return isGranted;
+        } else {
+          setPermissionGranted(false);
+          return false;
+        }
+      }
+    } catch (error) {
+      console.error('Error requesting storage permissions:', error);
+      setPermissionGranted(false);
+      return false;
+    }
+  };
+
+  // Fetch all audio files (optimized to avoid repeated permission checks)
+  const refreshAllSongs = async (requestPermissionIfNeeded: boolean = false) => {
+    // Check permission status (uses cache if available)
+    const hasPermission = await requestStoragePermissions(requestPermissionIfNeeded);
+
+    if (!hasPermission) {
+      if (requestPermissionIfNeeded) {
+        console.warn('Storage permission not granted, cannot load songs');
+      }
+      return;
+    }
+
+    try {
+      console.log('Loading music files...');
+      const media = await MediaLibrary.getAssetsAsync({ mediaType: 'audio', first: 1000 });
+      console.log(`Found ${media.assets.length} audio files`);
+
+      const songs: Song[] = media.assets.map(asset => ({
+        id: asset.id,
+        title: asset.filename,
+        uri: asset.uri,
+        duration: asset.duration
+      }));
+
+      // Sort alphabetically by title
+      songs.sort((a, b) => a.title.localeCompare(b.title));
+      setAllSongs(songs);
+      console.log('Songs loaded successfully:', songs.length);
+    } catch (error) {
+      console.error('Error loading songs:', error);
+    }
   };
 
   useEffect(() => {
-    refreshAllSongs();
+    // On initial load, request permissions if needed
+    refreshAllSongs(true);
   }, []);
 
   const addPlaylist = (name: string) => {
@@ -175,6 +296,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         getSongsForPlaylist,
         getRecentlyPlayedSongs,
         refreshAllSongs,
+        requestStoragePermissions,
         recentlyPlayed,
         setRecentlyPlayed,
       }}

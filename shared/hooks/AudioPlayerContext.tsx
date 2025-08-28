@@ -3,11 +3,11 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { AppState, AppStateStatus, PermissionsAndroid, Platform } from 'react-native';
 import BackgroundTimer from 'react-native-background-timer';
 import TrackPlayer, {
-  Event,
-  State as TrackPlayerState,
-  usePlaybackState,
-  useProgress,
-  useTrackPlayerEvents
+    Event,
+    State as TrackPlayerState,
+    usePlaybackState,
+    useProgress,
+    useTrackPlayerEvents
 } from 'react-native-track-player';
 import { Song } from '../types/music';
 import { useMusic } from './MusicContext';
@@ -68,9 +68,9 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const { recentlyPlayed, setRecentlyPlayed } = useMusic();
 
-  // TrackPlayer hooks
+  // TrackPlayer hooks (reduced update frequency for better performance)
   const playbackState = usePlaybackState();
-  const { position, duration } = useProgress(250);
+  const { position, duration } = useProgress(500); // Reduced from 250ms to 500ms
 
   const pendingTimer = useRef<number | null>(null);
   const lastPositionRef = useRef<number>(0);
@@ -207,11 +207,14 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     });
   }, []);
 
-  // Play a song (replace queue with songList, skip to selected song)
+  // Track the current queue to avoid unnecessary rebuilds
+  const currentQueueRef = useRef<string[]>([]);
+
+  // Play a song (optimized to avoid unnecessary queue rebuilds)
   const playMusic = async (song: Song) => {
     // Request notification permission when user first plays music
     await requestNotificationPermission();
-    
+
     const playbackState = await TrackPlayer.getState();
     if (
       (playbackState === TrackPlayerState.Paused || playbackState === TrackPlayerState.Ready) &&
@@ -233,24 +236,39 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     isSettingTrack.current = true;
     try {
-      // Replace queue with current songList
-      await TrackPlayer.reset();
-      await TrackPlayer.add(songListRef.current.map(s => ({
-        id: s.id,
-        url: s.uri,
-        title: s.title,
-        artist: '',
-        duration: s.duration ? s.duration / 1000 : undefined,
-      })));
+      const currentSongIds = songListRef.current.map(s => s.id);
+      const queueNeedsUpdate = JSON.stringify(currentQueueRef.current) !== JSON.stringify(currentSongIds);
+
+      if (queueNeedsUpdate) {
+        console.log('Queue needs update, rebuilding...');
+        // Only rebuild queue if the song list has changed
+        await TrackPlayer.reset();
+        await TrackPlayer.add(songListRef.current.map(s => ({
+          id: s.id,
+          url: s.uri,
+          title: s.title,
+          artist: '',
+          duration: s.duration ? s.duration / 1000 : undefined,
+        })));
+        currentQueueRef.current = currentSongIds;
+      }
+
+      // Find and skip to the requested song
       const idx = songListRef.current.findIndex(s => s.id === song.id);
       if (idx >= 0) {
-        await TrackPlayer.skip(idx);
+        const currentTrackIndex = await TrackPlayer.getCurrentTrack();
+        if (currentTrackIndex !== idx) {
+          console.log(`Skipping to track ${idx}`);
+          await TrackPlayer.skip(idx);
+        }
       }
+
       await TrackPlayer.play();
 
-      // Persist last played song
+      // Persist last played song (async, don't await)
       AsyncStorage.setItem('lastPlayedSong', JSON.stringify(song));
-      // Update recently played
+
+      // Update recently played (optimized)
       setRecentlyPlayed((prev: Song[]) => {
         const filtered = prev.filter((s: Song) => s.id !== song.id);
         return [song, ...filtered].slice(0, 20);
@@ -286,19 +304,25 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const playNext = async () => {
     try {
-      await TrackPlayer.skipToNext();
-      await TrackPlayer.play();
+      const currentTrackIndex = await TrackPlayer.getCurrentTrack();
+      if (currentTrackIndex !== null && currentTrackIndex < songListRef.current.length - 1) {
+        await TrackPlayer.skipToNext();
+        // TrackPlayer automatically starts playing the next track
+      }
     } catch (e) {
-      // No next track
+      console.log('No next track available');
     }
   };
 
   const playPrevious = async () => {
     try {
-      await TrackPlayer.skipToPrevious();
-      await TrackPlayer.play();
+      const currentTrackIndex = await TrackPlayer.getCurrentTrack();
+      if (currentTrackIndex !== null && currentTrackIndex > 0) {
+        await TrackPlayer.skipToPrevious();
+        // TrackPlayer automatically starts playing the previous track
+      }
     } catch (e) {
-      // No previous track
+      console.log('No previous track available');
     }
   };
 
@@ -607,7 +631,7 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       } catch (error) {
         console.error('[END_OF_SONG] Error in periodic check:', error);
       }
-    }, 1000); // Check every second
+    }, 2000); // Check every 2 seconds (reduced from 1 second for better performance)
   };
 
   useEffect(() => {

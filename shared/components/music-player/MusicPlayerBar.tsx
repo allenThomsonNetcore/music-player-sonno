@@ -34,6 +34,7 @@ export const MusicPlayerBar: React.FC = () => {
   const [timerInput, setTimerInput] = useState('');
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [pickerDefaultTime, setPickerDefaultTime] = useState(new Date(Date.now() + 60 * 60 * 1000));
+  const [userHidTimer, setUserHidTimer] = useState(false);
 
   const {
     musicPlayerHeight,
@@ -81,12 +82,12 @@ export const MusicPlayerBar: React.FC = () => {
     await startEndOfSongTimer();
   };
 
-  // Auto-show timer section when timer is active
+  // Auto-show timer section when timer is active (but only if user hasn't manually hidden it)
   useEffect(() => {
-    if (timeRemaining !== null || timerMode === TimerMode.END_OF_SONG || scheduledStopTime) {
+    if ((timeRemaining !== null || timerMode === TimerMode.END_OF_SONG || scheduledStopTime) && !userHidTimer) {
       setIsTimerSectionVisible(true);
     }
-  }, [timeRemaining, timerMode, scheduledStopTime]);
+  }, [timeRemaining, timerMode, scheduledStopTime, userHidTimer]);
 
   // Update music player height when timer section visibility changes
   useEffect(() => {
@@ -136,12 +137,17 @@ export const MusicPlayerBar: React.FC = () => {
     clearAudioTimer();
     setScheduledStopTime(null);
     setTimerInput('');
+    setUserHidTimer(false); // Reset user hide preference when clearing timers
   };
 
   const clearCountdownTimer = () => {
     console.log('Clearing countdown timer only');
     clearAudioTimer(false); // Don't clear scheduled timers
     setTimerInput('');
+    // Only reset userHidTimer if no other timers are active
+    if (!scheduledStopTime && timerMode !== TimerMode.END_OF_SONG) {
+      setUserHidTimer(false);
+    }
   };
 
   return (
@@ -163,7 +169,16 @@ export const MusicPlayerBar: React.FC = () => {
         {/* Timer Toggle Button */}
         <TouchableOpacity
           style={styles.timerToggleButton}
-          onPress={() => setIsTimerSectionVisible(!isTimerSectionVisible)}
+          onPress={() => {
+            const newVisibility = !isTimerSectionVisible;
+            setIsTimerSectionVisible(newVisibility);
+            // Track if user is manually hiding the timer while it's active
+            if (!newVisibility && (timeRemaining !== null || timerMode === TimerMode.END_OF_SONG || scheduledStopTime)) {
+              setUserHidTimer(true);
+            } else if (newVisibility) {
+              setUserHidTimer(false);
+            }
+          }}
         >
           <Text style={styles.timerToggleText}>
             {isTimerSectionVisible ? ' Hide Timer' : ' Timer'}
@@ -206,8 +221,14 @@ export const MusicPlayerBar: React.FC = () => {
 
           {/* Timer Options Row */}
           <View style={styles.timerOptionsRow}>
-            <TouchableOpacity style={styles.scheduleButton} onPress={handleScheduleButtonPress}>
-              <Text style={styles.buttonText}>Schedule</Text>
+            <TouchableOpacity
+              style={[styles.scheduleButton, isPlaying && styles.disabledButton]}
+              onPress={handleScheduleButtonPress}
+              disabled={isPlaying}
+            >
+              <Text style={[styles.buttonText, isPlaying && styles.disabledButtonText]}>
+                {isPlaying ? 'Schedule' : 'Schedule'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.endOfSongButton, !currentSong && styles.disabledButton]}
