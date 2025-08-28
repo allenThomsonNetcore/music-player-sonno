@@ -66,6 +66,10 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const notificationPermissionRequested = useRef(false);
 
+  // New refs for pause/resume functionality
+  const timerPausedTime = useRef<number | null>(null); // When timer was paused
+  const timerRemainingWhenPaused = useRef<number | null>(null); // Remaining time when paused
+
   const { recentlyPlayed, setRecentlyPlayed } = useMusic();
 
   // TrackPlayer hooks (reduced update frequency for better performance)
@@ -283,10 +287,18 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
   const pauseMusic = async () => {
     await TrackPlayer.pause();
+    // Pause countdown timer if it's active (but not scheduled timer)
+    if (timerMode === TimerMode.COUNTDOWN && countdownRef.current) {
+      pauseCountdownTimer();
+    }
   };
 
   const resumeMusic = async () => {
     await TrackPlayer.play();
+    // Resume countdown timer if it was paused (but not scheduled timer)
+    if (timerMode === TimerMode.COUNTDOWN && timerRemainingWhenPaused.current !== null) {
+      resumeCountdownTimer();
+    }
   };
 
   const stopMusic = async () => {
@@ -635,13 +647,22 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
   };
 
   useEffect(() => {
-    console.log(`[TIMER] useEffect triggered - isPlaying: ${isPlaying}, pendingTimer: ${pendingTimer.current}`);
-    if (isPlaying && pendingTimer.current) {
-      console.log(`[TIMER] Music started playing, executing pending timer for ${pendingTimer.current} minutes`);
-      startBackgroundTimer(pendingTimer.current);
-      pendingTimer.current = null;
+    console.log(`[TIMER] useEffect triggered - isPlaying: ${isPlaying}, pendingTimer: ${pendingTimer.current}, pausedTimer: ${timerRemainingWhenPaused.current}`);
+
+    if (isPlaying) {
+      // Handle pending timer (when timer was set before music started)
+      if (pendingTimer.current) {
+        console.log(`[TIMER] Music started playing, executing pending timer for ${pendingTimer.current} minutes`);
+        startBackgroundTimer(pendingTimer.current);
+        pendingTimer.current = null;
+      }
+      // Handle resumed timer (when music was paused and now resumed)
+      else if (timerMode === TimerMode.COUNTDOWN && timerRemainingWhenPaused.current !== null) {
+        console.log(`[TIMER] Music resumed, resuming countdown timer`);
+        resumeCountdownTimer();
+      }
     }
-  }, [isPlaying]);
+  }, [isPlaying, timerMode]);
 
   // Monitor progress for end-of-song detection (fallback method) - DISABLED for now due to calculation issues
   useEffect(() => {
@@ -680,6 +701,90 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
   }, [position, duration, timerMode, isPlaying]);
 
+  const pauseCountdownTimer = () => {
+    if (timerMode !== TimerMode.COUNTDOWN || !countdownRef.current) return;
+
+    console.log('[COUNTDOWN_TIMER] Pausing countdown timer');
+
+    // Store the current remaining time
+    if (timerEndTime.current) {
+      const remainingMillis = timerEndTime.current - Date.now();
+      timerRemainingWhenPaused.current = Math.max(0, remainingMillis);
+      timerPausedTime.current = Date.now();
+      console.log(`[COUNTDOWN_TIMER] Paused with ${Math.ceil(timerRemainingWhenPaused.current / 1000)}s remaining`);
+    }
+
+    // Clear the active countdown interval
+    if (countdownRef.current) {
+      BackgroundTimer.clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+
+    // Clear the main timer
+    if (timerIdRef.current) {
+      BackgroundTimer.clearTimeout(timerIdRef.current);
+      timerIdRef.current = null;
+    }
+  };
+
+  const resumeCountdownTimer = () => {
+    if (timerMode !== TimerMode.COUNTDOWN || timerRemainingWhenPaused.current === null) return;
+
+    console.log('[COUNTDOWN_TIMER] Resuming countdown timer');
+
+    const remainingMillis = timerRemainingWhenPaused.current;
+    const remainingSeconds = Math.ceil(remainingMillis / 1000);
+
+    console.log(`[COUNTDOWN_TIMER] Resuming with ${remainingSeconds}s remaining`);
+
+    // Update the end time based on remaining time
+    timerEndTime.current = Date.now() + remainingMillis;
+
+    // Clear the paused state
+    timerRemainingWhenPaused.current = null;
+    timerPausedTime.current = null;
+
+    // Start background timer support if not already started
+    if (!backgroundTimerStarted.current) {
+      BackgroundTimer.start();
+      backgroundTimerStarted.current = true;
+    }
+
+    // Restart the countdown interval
+    countdownRef.current = BackgroundTimer.setInterval(() => {
+      const currentRemainingMillis = timerEndTime.current! - Date.now();
+      const currentRemainingSeconds = Math.ceil(currentRemainingMillis / 1000);
+
+      console.log(`[COUNTDOWN_TIMER] Resumed countdown: ${currentRemainingSeconds}s remaining`);
+      setTimeRemaining(currentRemainingSeconds > 0 ? currentRemainingSeconds : 0);
+
+      if (currentRemainingMillis <= 0) {
+        console.log('[COUNTDOWN_TIMER] Resumed timer finished - force stopping music');
+        BackgroundTimer.clearInterval(countdownRef.current);
+        countdownRef.current = null;
+        forceStopMusic().then(() => {
+          console.log('[COUNTDOWN_TIMER] Force stop completed, clearing timer state');
+          clearTimer();
+          stopBackgroundTimer();
+        });
+      }
+    }, 1000);
+
+    // Set up the main timer for the remaining time
+    timerIdRef.current = BackgroundTimer.setTimeout(() => {
+      console.log('[COUNTDOWN_TIMER] Resumed main timer fired - force stopping music');
+      if (countdownRef.current) {
+        BackgroundTimer.clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      forceStopMusic().then(() => {
+        console.log('[COUNTDOWN_TIMER] Force stop completed, clearing timer state');
+        clearTimer();
+        stopBackgroundTimer();
+      });
+    }, remainingMillis);
+  };
+
   const stopBackgroundTimer = () => {
     if (backgroundTimerStarted.current) {
       console.log('[TIMER] Stopping background timer');
@@ -709,6 +814,10 @@ export const AudioPlayerProvider: React.FC<{ children: React.ReactNode }> = ({ c
       clearInterval(endOfSongCheckInterval.current);
       endOfSongCheckInterval.current = null;
     }
+
+    // Clear paused timer state
+    timerRemainingWhenPaused.current = null;
+    timerPausedTime.current = null;
 
     // Only stop background timer if we're not fading out
     if (backgroundTimerStarted.current && !isFadingOut.current) {
