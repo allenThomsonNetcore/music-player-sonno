@@ -1,8 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAudioPlayer } from './hooks/AudioPlayerContext';
-import { Playlist as PlaylistType, useMusic } from './hooks/MusicContext';
+import { Alert, FlatList, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SwipeableTabWrapper } from '../shared/components/SwipeableTabWrapper';
+import { useAudioPlayer } from '../shared/hooks/AudioPlayerContext';
+import { Playlist as PlaylistType, useMusic } from '../shared/hooks/MusicContext';
+import { useMusicPlayerHeight } from '../shared/hooks/MusicPlayerHeightContext';
 
 export default function PlaylistsScreen() {
   const {
@@ -20,6 +23,7 @@ export default function PlaylistsScreen() {
   const [addSongsSearchQuery, setAddSongsSearchQuery] = useState('');
 
   const { currentSong, playMusic, setSongList, stopMusicWithoutClearingTimer } = useAudioPlayer();
+  const { musicPlayerHeight } = useMusicPlayerHeight();
 
   // Reset selectedPlaylist when tab is focused
   useFocusEffect(
@@ -95,9 +99,69 @@ export default function PlaylistsScreen() {
     }
   };
 
-  // Header: horizontal playlist selector
-  const renderHeader = () => (
-    <View>
+  const handlePlaySongFromPlaylist = async (song: any) => {
+    if (selectedPlaylist) {
+      const songs = getSongsForPlaylist(selectedPlaylist);
+      setSongList(songs);
+      await playMusic(song);
+    }
+  };
+
+  const handleFeedback = () => {
+    const subject = encodeURIComponent('Music Player App Feedback');
+    const body = encodeURIComponent(
+      `Hi,\n\nI would like to provide feedback about the Music Player app.\n\n` +
+      `Device: ${Platform.OS} ${Platform.Version}\n` +
+      `App Version: 1.0.0\n\n` +
+      `Feedback:\n\n` +
+      `Best regards,\n[Your Name]`
+    );
+    const mailtoUrl = `mailto:allono.at@gmail.com?subject=${subject}&body=${body}`;
+    
+    Linking.canOpenURL(mailtoUrl).then(supported => {
+      if (supported) {
+        Linking.openURL(mailtoUrl);
+      } else {
+        Alert.alert(
+          'Email To',
+          'Please send feedback to: allono.at@gmail.com',
+          [{ text: 'OK' }]
+        );
+      }
+    });
+  };
+
+  return (
+    <SwipeableTabWrapper currentTab="playlists">
+      <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.listContent, { paddingBottom: musicPlayerHeight + 20 }]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header with title and feedback button */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Playlists</Text>
+        <TouchableOpacity style={styles.feedbackButton} onPress={handleFeedback}>
+          <Ionicons name="information-circle-outline" size={24} color="#007AFF" />
+          <Text style={styles.feedbackLabel}>Feedback</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Create new playlist */}
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          placeholder="New playlist name"
+          placeholderTextColor="#888"
+          value={newPlaylistName}
+          onChangeText={setNewPlaylistName}
+        />
+        <TouchableOpacity style={styles.addButton} onPress={handleCreatePlaylist}>
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Horizontal playlist selector */}
       <Text style={styles.title}>Your Playlists</Text>
       <FlatList
         data={playlists}
@@ -116,103 +180,70 @@ export default function PlaylistsScreen() {
         horizontal
         style={{ marginBottom: 40, minHeight: 60 }}
         contentContainerStyle={{ alignItems: 'center', paddingVertical: 10 }}
+        showsHorizontalScrollIndicator={false}
       />
-    </View>
-  );
 
-  // Footer: selected playlist songs and add-songs UI
-  const renderFooter = () => (
-    selectedPlaylist && selectedPlaylistSongs && Array.isArray(selectedPlaylistSongs) ? (
-      <View>
-        <View style={styles.playlistSongsHeader}>
-          <Text style={styles.playlistSongsTitle}>Songs in "{selectedPlaylist.name}"</Text>
-          <TouchableOpacity style={styles.playButton} onPress={handlePlayPlaylist}>
-            <Text style={styles.playButtonText}>Play</Text>
-          </TouchableOpacity>
-        </View>
-        {selectedPlaylistSongs.length > 0 ? (
-          <FlatList
-            data={sortedPlaylistSongs}
-            keyExtractor={item => item.id}
-            renderItem={({ item }) => (
-              <View style={[styles.songRow, currentSong?.id === item.id && styles.currentSongRow]}>
-                <Text style={styles.songTitle}>{item.title}</Text>
-                {currentSong?.id === item.id && <Text style={styles.playingText}>*</Text>}
-                <TouchableOpacity onPress={() => handleRemoveSong(item.id)}>
-                  <Text style={styles.removeText}>Remove</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            ListEmptyComponent={<Text style={styles.emptyText}>No songs in this playlist.</Text>}
-            style={{ marginBottom: 20 }}
-          />
-        ) : (
-          <Text style={styles.emptyText}>No songs in this playlist.</Text>
-        )}
-        <Text style={styles.addSongsTitle}>Add Songs</Text>
-        
-        {/* Search Bar for Add Songs */}
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search songs to add..."
-            placeholderTextColor="#888"
-            value={addSongsSearchQuery}
-            onChangeText={setAddSongsSearchQuery}
-          />
-        </View>
-        
-        <FlatList
-          data={filteredAvailableSongs}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <View style={styles.songRow}>
-              <Text style={styles.songTitle}>{item.title}</Text>
+      {/* Selected Playlist Content */}
+      {selectedPlaylist && (
+        <>
+          {/* Songs in Playlist */}
+          <View style={styles.playlistSongsHeader}>
+            <Text style={styles.playlistSongsTitle}>Songs in "{selectedPlaylist.name}"</Text>
+            <TouchableOpacity style={styles.playButton} onPress={handlePlayPlaylist}>
+              <Text style={styles.playButtonText}>Play</Text>
+            </TouchableOpacity>
+          </View>
+
+          {sortedPlaylistSongs.length > 0 ? (
+            sortedPlaylistSongs.map(item => (
+              <TouchableOpacity key={item.id} onPress={() => handlePlaySongFromPlaylist(item)}>
+                <View style={[styles.songRow, currentSong?.id === item.id && styles.currentSongRow]}>
+                  <Text style={styles.songTitle} numberOfLines={1}>{item.title}</Text>
+                  {currentSong?.id === item.id && <Text style={styles.playingText}></Text>}
+                  <TouchableOpacity onPress={() => handleRemoveSong(item.id)}>
+                    <Text style={styles.removeText}>-</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No songs in this playlist.</Text>
+          )}
+
+          {/* Add Songs Section */}
+          <Text style={styles.addSongsTitle}>Add Songs</Text>
+          <View style={styles.searchContainer}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search songs to add..."
+              placeholderTextColor="#888"
+              value={addSongsSearchQuery}
+              onChangeText={setAddSongsSearchQuery}
+            />
+          </View>
+
+          {filteredAvailableSongs.map(item => (
+            <View key={item.id} style={styles.songRow}>
+              <Text style={styles.songTitle} numberOfLines={1}>{item.title}</Text>
               <TouchableOpacity onPress={() => handleAddSong(item.id)}>
                 <Text style={styles.addText}>+</Text>
               </TouchableOpacity>
             </View>
-          )}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>
+          ))}
+           {filteredAvailableSongs.length === 0 && (
+             <Text style={styles.emptyText}>
               {addSongsSearchQuery 
                 ? `No songs found matching "${addSongsSearchQuery}"` 
                 : availableSongs.length === 0 
-                  ? 'All songs are in this playlist.' 
-                  : 'No songs available.'
+                  ? 'All songs are already in this playlist.' 
+                  : ''
               }
             </Text>
-          }
-          style={{ marginBottom: 20 }}
-        />
-      </View>
-    ) : null
-  );
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="New playlist name"
-          placeholderTextColor="#888"
-          value={newPlaylistName}
-          onChangeText={setNewPlaylistName}
-        />
-        <TouchableOpacity style={styles.addButton} onPress={handleCreatePlaylist}>
-          <Text style={styles.addButtonText}>+</Text>
-        </TouchableOpacity>
-      </View>
-      <FlatList
-        data={[]}
-        keyExtractor={() => ''}
-        renderItem={() => null}
-        ListHeaderComponent={renderHeader}
-        ListFooterComponent={renderFooter}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-      />
-    </View>
+           )}
+        </>
+      )}
+      </ScrollView>
+    </SwipeableTabWrapper>
   );
 }
 
@@ -227,7 +258,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 20,
   },
   inputRow: {
     flexDirection: 'row',
@@ -248,8 +278,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: 'white',
+    fontSize: 24,
   },
   playlistItem: {
     backgroundColor: '#23242a',
@@ -314,26 +344,27 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   playingText: {
-    color: '#4CAF50',
     fontWeight: 'bold',
   },
   removeText: {
-    color: '#FF5252',
+    color: '#FF3B30',
+    fontSize: 28,
     fontWeight: 'bold',
   },
   addSongsTitle: {
-    color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#fff',
     marginTop: 20,
     marginBottom: 10,
   },
   addText: {
-    color: '#4CAF50',
+    color: '#34C759',
+    fontSize: 28,
     fontWeight: 'bold',
   },
   listContent: {
-    paddingBottom: 20,
+    // paddingBottom is now dynamic based on music player height
   },
   searchContainer: {
     marginBottom: 10,
@@ -342,9 +373,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#23242a',
     color: '#fff',
     borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#23242a',
+    padding: 10,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  feedbackButton: {
+    padding: 8,
+    alignItems: 'center',
+  },
+  feedbackLabel: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
 }); 

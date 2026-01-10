@@ -1,9 +1,11 @@
 import { useFocusEffect } from 'expo-router';
 import React, { useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useAudioPlayer } from './hooks/AudioPlayerContext';
-import { useMusic } from './hooks/MusicContext';
-import { Song } from './types/music';
+import { SwipeableTabWrapper } from '../shared/components/SwipeableTabWrapper';
+import { useAudioPlayer } from '../shared/hooks/AudioPlayerContext';
+import { useMusic } from '../shared/hooks/MusicContext';
+import { useMusicPlayerHeight } from '../shared/hooks/MusicPlayerHeightContext';
+import { Song } from '../shared/types/music';
 
 export default function AllSongsScreen() {
   const {
@@ -15,6 +17,7 @@ export default function AllSongsScreen() {
 
   const songList = getSongsForPlaylist(null); // Always get all songs
   const { currentSong, playMusic, setSongList, stopMusicWithoutClearingTimer } = useAudioPlayer();
+  const { musicPlayerHeight } = useMusicPlayerHeight();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Filter songs based on search query
@@ -43,7 +46,8 @@ export default function AllSongsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SwipeableTabWrapper currentTab="music-player">
+      <View style={styles.container}>
       <Text style={styles.title}>All Songs</Text>
       
       {/* Search Bar */}
@@ -65,8 +69,10 @@ export default function AllSongsScreen() {
             style={[styles.songRow, currentSong?.id === item.id && styles.currentSongRow]}
             onPress={() => handlePlaySong(item)}
           >
-            <Text style={styles.songTitle}>{item.title}</Text>
-            {currentSong?.id === item.id && <Text style={styles.playingText}>*</Text>}
+           <Text style={[styles.songTitle, currentSong?.id === item.id && styles.playingText]} numberOfLines={1}>
+              {item.title}
+            </Text>
+            {currentSong?.id === item.id && <Text style={styles.playingText}></Text>}
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -74,9 +80,11 @@ export default function AllSongsScreen() {
             {searchQuery ? `No songs found matching "${searchQuery}"` : 'No songs found on device.'}
           </Text>
         }
-        contentContainerStyle={styles.listContent}
+        style={{ backgroundColor: '#181A20' }}
+        contentContainerStyle={[styles.listContent, { paddingBottom: musicPlayerHeight + 20 }]}
       />
-    </View>
+      </View>
+    </SwipeableTabWrapper>
   );
 }
 
@@ -100,7 +108,7 @@ const styles = StyleSheet.create({
     borderColor: '#23242a',
   },
   listContent: {
-    paddingBottom: 20, // Reduced since no bottom tabs
+    // paddingBottom is now dynamic based on music player height
   },
   title: {
     fontSize: 22,
@@ -127,7 +135,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   playingText: {
-    color: '#4CAF50',
+ 
     fontWeight: 'bold',
   },
   emptyText: {

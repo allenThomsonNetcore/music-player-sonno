@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Song } from '../types/music';
 import { setupAudio } from '../utils/audioUtils';
 
+
+
+
+
 export const useAudioPlayer = (playlist: Song[] = []) => {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
@@ -100,6 +104,25 @@ export const useAudioPlayer = (playlist: Song[] = []) => {
     }
   };
 
+  const fadeOutAndStop = async (fadeDuration = 2000) => {
+    if (!sound) return;
+    try {
+      const steps = 20;
+      const stepTime = fadeDuration / steps;
+      let currentVolume = 1.0;
+      for (let i = 0; i < steps; i++) {
+        currentVolume -= 1.0 / steps;
+        if (currentVolume < 0) currentVolume = 0;
+        await sound.setVolumeAsync(currentVolume);
+        await new Promise(res => setTimeout(res, stepTime));
+      }
+      await stopMusic();
+      await sound.setVolumeAsync(1.0); // Reset for next play
+    } catch (e) {
+      await stopMusic();
+    }
+  };
+
   const startTimer = async (minutes: number) => {
     // Only start timer after playback is confirmed started
     if (!isPlaying) return;
@@ -118,7 +141,7 @@ export const useAudioPlayer = (playlist: Song[] = []) => {
     }, 1000);
     const millis = minutes * 60000;
     timerIdRef.current = setTimeout(() => {
-      stopMusic();
+      fadeOutAndStop();
     }, millis);
   };
 
@@ -154,5 +177,6 @@ export const useAudioPlayer = (playlist: Song[] = []) => {
     playNext,
     playPrevious,
     setOnSongEnd,
+    fadeOutAndStop,
   };
 }; 

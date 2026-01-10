@@ -18,6 +18,7 @@ interface BottomSheetPlayerProps {
   onPrevious: () => void;
   onSeek: (progress: number) => void;
   onStartTimer: (minutes: number) => void;
+  onStartEndOfSongTimer: () => void;
 }
 
 function formatTime(ms: number) {
@@ -40,6 +41,7 @@ export const BottomSheetPlayer: React.FC<BottomSheetPlayerProps> = ({
   onPrevious,
   onSeek,
   onStartTimer,
+  onStartEndOfSongTimer,
 }) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['80', '50%'], []);
@@ -180,23 +182,30 @@ export const BottomSheetPlayer: React.FC<BottomSheetPlayerProps> = ({
       <View style={styles.timerContainer}>
         <Text style={styles.timerTitle}>Sleep Timer</Text>
         <View style={styles.timerButtons}>
-          <TouchableOpacity 
-            style={styles.timerButton} 
+          <TouchableOpacity
+            style={styles.timerButton}
             onPress={() => onStartTimer(15)}
           >
             <Text style={styles.timerButtonText}>15m</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.timerButton} 
+          <TouchableOpacity
+            style={styles.timerButton}
             onPress={() => onStartTimer(30)}
           >
             <Text style={styles.timerButtonText}>30m</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.timerButton} 
+          <TouchableOpacity
+            style={styles.timerButton}
             onPress={() => onStartTimer(60)}
           >
             <Text style={styles.timerButtonText}>1h</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.timerButton, styles.endOfSongTimerButton]}
+            onPress={onStartEndOfSongTimer}
+            disabled={!currentSong}
+          >
+            <Text style={[styles.timerButtonText, !currentSong && styles.disabledText]}>End of Song</Text>
           </TouchableOpacity>
         </View>
         {timeRemaining !== null && (
@@ -379,9 +388,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  endOfSongTimerButton: {
+    backgroundColor: '#FF6B35',
+  },
+  disabledText: {
+    color: '#ccc',
+  },
   timerStatus: {
     fontSize: 14,
     color: '#007AFF',
     fontWeight: '600',
   },
-}); 
+});
